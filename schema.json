@@ -1,0 +1,21 @@
+{
+  "$ref": "#/definitions/LinearConfig",
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "definitions": {
+    "LinearConfig": {
+      "additionalProperties": false,
+      "description": "Raw config shape (what gets saved to disk). All fields optional -- only overrides are stored.\n\nJSDoc comments on fields become `description` in the generated JSON Schema. Run `pnpm gen:schema` after changing this interface.",
+      "properties": {
+        "apiKey": {
+          "description": "Linear API key. If not set, falls back to LINEAR_API_KEY env var.",
+          "type": "string"
+        },
+        "enabled": {
+          "description": "Enable or disable the extension.",
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    }
+  }
+}
