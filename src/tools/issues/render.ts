@@ -22,6 +22,9 @@ export function renderIssueExpanded(
   if (issue.project) {
     details.push(theme.fg("muted", "Project: ") + issue.project);
   }
+  if (issue.milestone) {
+    details.push(theme.fg("muted", "Milestone: ") + issue.milestone);
+  }
   details.push(theme.fg("muted", "Team: ") + issue.team);
   if (issue.labels.length > 0) {
     details.push(theme.fg("muted", "Labels: ") + issue.labels.join(", "));

@@ -1,7 +1,9 @@
 import type { LinearClient } from "@linear/sdk";
 import { resolveTeamId } from "../../../teams";
+import { resolveProjectId } from "../../projects/lookup";
 import { serializeIssue } from "../serialize";
 import type { SerializedIssue } from "../types";
+import { resolveIssueProjectMilestoneId } from "./helpers";
 
 export interface CreateIssueParams {
   teamId?: string;
@@ -13,6 +15,9 @@ export interface CreateIssueParams {
   priority?: number;
   stateId?: string;
   projectId?: string;
+  projectName?: string;
+  projectMilestoneId?: string;
+  projectMilestoneName?: string;
   labelIds?: string[];
   dueDate?: string;
   estimate?: number;
@@ -47,11 +52,27 @@ export async function createIssue(
       params.teamName,
     );
     if (!teamId) {
-      const identifier = params.teamKey ?? params.teamName;
+      const identifier = params.teamKey ?? params.teamName ?? params.teamId;
       return {
         error: `Could not find team "${identifier}". Verify the team key or name.`,
       };
     }
+
+    const resolvedProjectId = await resolveProjectId(
+      client,
+      params.projectId,
+      params.projectName,
+    );
+    const { milestoneId, error } = await resolveIssueProjectMilestoneId(
+      client,
+      {
+        projectId: resolvedProjectId,
+        projectName: params.projectName,
+        projectMilestoneId: params.projectMilestoneId,
+        projectMilestoneName: params.projectMilestoneName,
+      },
+    );
+    if (error) return { error };
 
     const payload = await client.createIssue({
       teamId,
@@ -60,7 +81,8 @@ export async function createIssue(
       assigneeId: params.assigneeId,
       priority: params.priority,
       stateId: params.stateId,
-      projectId: params.projectId,
+      projectId: resolvedProjectId,
+      projectMilestoneId: milestoneId,
       labelIds: params.labelIds,
       dueDate: params.dueDate,
       estimate: params.estimate,

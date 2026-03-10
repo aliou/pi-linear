@@ -10,32 +10,79 @@ import type {
 import { type Component, Spacer, Text } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import { getLinearClient, LINEAR_CREDENTIALS_ERROR } from "../../client";
+import { createIssueAttachment } from "./actions/attachment-create";
+import { listIssueAttachments } from "./actions/attachments-list";
+import { createIssueComment } from "./actions/comment-create";
+import { deleteIssueComment } from "./actions/comment-delete";
+import { updateIssueComment } from "./actions/comment-update";
+import { listIssueComments } from "./actions/comments-list";
 import { type CreateIssueParams, createIssue } from "./actions/create";
+import { listIssueDocuments } from "./actions/documents-list";
 import { type ListIssuesParams, listIssues } from "./actions/list";
+import { createIssueRelation } from "./actions/relation-create";
+import { deleteIssueRelation } from "./actions/relation-delete";
+import { updateIssueRelation } from "./actions/relation-update";
+import { listIssueRelations } from "./actions/relations-list";
 import { type SearchIssuesParams, searchIssues } from "./actions/search";
 import { type ShowIssueParams, showIssue } from "./actions/show";
 import { type UpdateIssueParams, updateIssue } from "./actions/update";
 import { renderIssueChildren, renderIssueExpanded } from "./render";
-import type { SerializedIssue } from "./types";
+import type {
+  SerializedAttachment,
+  SerializedComment,
+  SerializedDocument,
+  SerializedIssue,
+  SerializedIssueRelation,
+} from "./types";
+
+const actionValues = [
+  "show",
+  "create",
+  "list",
+  "search",
+  "update",
+  "comments_list",
+  "comment_create",
+  "comment_update",
+  "comment_delete",
+  "attachments_list",
+  "attachment_create",
+  "relations_list",
+  "relation_create",
+  "relation_update",
+  "relation_delete",
+  "documents_list",
+] as const;
 
 const IssuesParams = Type.Object({
   action: Type.Union(
-    [
-      Type.Literal("show"),
-      Type.Literal("create"),
-      Type.Literal("list"),
-      Type.Literal("search"),
-      Type.Literal("update"),
-    ],
+    actionValues.map((value) => Type.Literal(value)),
     {
-      description:
-        "Action to perform: show, create, list, search, or update issues.",
+      description: "Issue action to perform.",
     },
   ),
   id: Type.Optional(
     Type.String({
       description:
-        "Issue ID or identifier (e.g. ENG-123). Required for show and update.",
+        "Issue ID or identifier (e.g. ENG-123). Required for show/update and issue-scoped actions.",
+    }),
+  ),
+  commentId: Type.Optional(Type.String({ description: "Comment ID." })),
+  relationId: Type.Optional(Type.String({ description: "Relation ID." })),
+  relatedIssueId: Type.Optional(
+    Type.String({ description: "Related issue ID or identifier." }),
+  ),
+  relationType: Type.Optional(
+    Type.String({
+      description:
+        "Relation type: blocks, blocked_by, duplicate, related, or similar.",
+    }),
+  ),
+  body: Type.Optional(Type.String({ description: "Comment markdown body." })),
+  url: Type.Optional(Type.String({ description: "Attachment URL." })),
+  includeInverseRelations: Type.Optional(
+    Type.Boolean({
+      description: "Include inverse relations when listing issue relations.",
     }),
   ),
   query: Type.Optional(
@@ -57,6 +104,14 @@ const IssuesParams = Type.Object({
   ),
   projectId: Type.Optional(Type.String({ description: "Project ID." })),
   projectName: Type.Optional(Type.String({ description: "Project name." })),
+  projectMilestoneId: Type.Optional(
+    Type.String({ description: "Project milestone ID." }),
+  ),
+  projectMilestoneName: Type.Optional(
+    Type.String({
+      description: "Project milestone name. Requires projectId or projectName.",
+    }),
+  ),
   teamId: Type.Optional(
     Type.String({
       description:
@@ -69,14 +124,12 @@ const IssuesParams = Type.Object({
     }),
   ),
   teamName: Type.Optional(
-    Type.String({
-      description: "Team name. Used as filter for list/search.",
-    }),
+    Type.String({ description: "Team name. Used as filter for list/search." }),
   ),
   labelId: Type.Optional(Type.String({ description: "Label ID." })),
   labelName: Type.Optional(Type.String({ description: "Label name." })),
   title: Type.Optional(
-    Type.String({ description: "Issue title. Required for create." }),
+    Type.String({ description: "Issue title or attachment title." }),
   ),
   description: Type.Optional(
     Type.String({ description: "Issue description in markdown." }),
@@ -123,7 +176,12 @@ interface IssuesDetails {
   issue?: SerializedIssue;
   children?: SerializedIssue[];
   issues?: SerializedIssue[];
+  comments?: SerializedComment[];
+  attachments?: SerializedAttachment[];
+  relations?: SerializedIssueRelation[];
+  documents?: SerializedDocument[];
   totalCount?: number;
+  deleted?: boolean;
   error?: string;
 }
 
@@ -140,6 +198,7 @@ function formatIssueForContent(issue: SerializedIssue): string {
     `team=${issue.team}`,
   ];
   if (issue.project) parts.push(`project=${issue.project}`);
+  if (issue.milestone) parts.push(`milestone=${issue.milestone}`);
   if (issue.assignee) parts.push(`assignee=${issue.assignee}`);
   parts.push(`url=${issue.url}`);
   return parts.join(" | ");
@@ -160,9 +219,8 @@ function formatIssueListContent(
   const lines = issues
     .slice(0, CONTENT_MAX)
     .map((issue) => `- ${formatIssueForContent(issue)}`);
-  if (issues.length > CONTENT_MAX) {
+  if (issues.length > CONTENT_MAX)
     lines.push(`- + ${issues.length - CONTENT_MAX} more`);
-  }
   return `${header}\n${lines.join("\n")}`;
 }
 
@@ -181,13 +239,21 @@ function renderIssueListItem(issue: SerializedIssue, theme: Theme): Text {
     `${theme.fg("muted", "Status: ")}${issue.state}`,
     `${theme.fg("muted", "Priority: ")}${issue.priorityLabel}`,
   ];
-  if (issue.assignee) {
+  if (issue.assignee)
     meta.push(`${theme.fg("muted", "Assignee: ")}${issue.assignee}`);
-  }
-  if (issue.project) {
+  if (issue.project)
     meta.push(`${theme.fg("muted", "Project: ")}${issue.project}`);
-  }
+  if (issue.milestone)
+    meta.push(`${theme.fg("muted", "Milestone: ")}${issue.milestone}`);
   return new Text(`${line1}\n${meta.join(theme.fg("dim", " | "))}`, 0, 0);
+}
+
+function linesFromGenericItems(items: string[], noun: string): string {
+  if (items.length === 0) return `No ${noun} found.`;
+  const lines = items.slice(0, CONTENT_MAX).map((line) => `- ${line}`);
+  if (items.length > CONTENT_MAX)
+    lines.push(`- + ${items.length - CONTENT_MAX} more`);
+  return lines.join("\n");
 }
 
 export function registerIssuesTool(pi: ExtensionAPI) {
@@ -195,7 +261,7 @@ export function registerIssuesTool(pi: ExtensionAPI) {
     name: "linear_issues",
     label: "Linear: Issues",
     description:
-      "Manage Linear issues. Actions: show, create, list, search, update.",
+      "Manage Linear issues, comments, attachments, relations, and linked docs.",
     parameters: IssuesParams,
 
     async execute(
@@ -218,170 +284,314 @@ export function registerIssuesTool(pi: ExtensionAPI) {
         details: { action: params.action },
       });
 
-      let result:
-        | {
-            issue?: SerializedIssue;
-            children?: SerializedIssue[];
-            error?: string;
-          }
-        | { issues?: SerializedIssue[]; totalCount?: number; error?: string };
+      let details: IssuesDetails;
+      let text = "";
 
       switch (params.action) {
         case "show": {
-          const showResult = await showIssue(
+          const result = await showIssue(
             client,
             params as unknown as ShowIssueParams,
           );
-          result = {
-            issue: showResult.issue,
-            children: showResult.children,
-            error: showResult.error,
-          };
+          if (result.error) {
+            details = { action: params.action, error: result.error };
+            break;
+          }
+          const issue = result.issue as SerializedIssue;
+          const children = result.children;
+          const summary = [
+            `Found issue ${issue.identifier}: ${issue.title}`,
+            `Status: ${issue.state} | Priority: ${issue.priorityLabel} | Team: ${issue.team}`,
+          ];
+          if (issue.project) summary.push(`Project: ${issue.project}`);
+          if (issue.milestone) summary.push(`Milestone: ${issue.milestone}`);
+          if (issue.assignee) summary.push(`Assignee: ${issue.assignee}`);
+          summary.push(`URL: ${issue.url}`);
+          if (issue.description) summary.push(`\n${issue.description}`);
+          if (children && children.length > 0) {
+            summary.push(`\nSub-issues (${children.length}):`);
+            for (const child of children) {
+              summary.push(
+                `  ${child.identifier}: ${child.title} | ${child.state} | ${child.priorityLabel}`,
+              );
+            }
+          }
+          text = summary.join("\n");
+          details = { action: params.action, issue, children };
           break;
         }
-        case "create":
-          result = await createIssue(
+        case "create": {
+          const result = await createIssue(
             client,
             params as unknown as CreateIssueParams,
           );
+          details = result.error
+            ? { action: params.action, error: result.error }
+            : { action: params.action, issue: result.issue };
+          if (result.issue)
+            text = `Created issue ${result.issue.identifier}: ${result.issue.title}`;
           break;
+        }
+        case "update": {
+          const result = await updateIssue(
+            client,
+            params as unknown as UpdateIssueParams,
+          );
+          details = result.error
+            ? { action: params.action, error: result.error }
+            : { action: params.action, issue: result.issue };
+          if (result.issue)
+            text = `Updated issue ${result.issue.identifier}: ${result.issue.title}`;
+          break;
+        }
         case "list": {
           const listParams = params as unknown as ListIssuesParams;
-          result = await listIssues(client, {
+          const result = await listIssues(client, {
             ...listParams,
             includeCompleted: listParams.includeCompleted ?? false,
             includeCanceled: listParams.includeCanceled ?? false,
             includeSubIssues: listParams.includeSubIssues ?? false,
           });
+          details = result.error
+            ? { action: params.action, error: result.error }
+            : { action: params.action, issues: result.issues };
+          text = result.issues
+            ? formatIssueListContent(result.issues, params.action)
+            : "";
           break;
         }
-        case "search":
-          result = await searchIssues(
+        case "search": {
+          const result = await searchIssues(
             client,
             params as unknown as SearchIssuesParams,
           );
-          break;
-        case "update":
-          result = await updateIssue(
-            client,
-            params as unknown as UpdateIssueParams,
-          );
-          break;
-        default:
-          result = { error: `Unknown action: ${params.action}` };
-      }
-
-      if (result.error) {
-        return {
-          content: [{ type: "text", text: `Error: ${result.error}` }],
-          details: { action: params.action, error: result.error },
-        };
-      }
-
-      if ("issues" in result && result.issues) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: formatIssueListContent(
+          details = result.error
+            ? { action: params.action, error: result.error }
+            : {
+                action: params.action,
+                issues: result.issues,
+                totalCount: result.totalCount,
+              };
+          text = result.issues
+            ? formatIssueListContent(
                 result.issues,
                 params.action,
                 result.totalCount,
-              ),
-            },
-          ],
-          details: {
+              )
+            : "";
+          break;
+        }
+        case "comments_list": {
+          const result = await listIssueComments(client, {
+            issueId: String(params.id ?? ""),
+          });
+          details = result.error
+            ? { action: params.action, error: result.error }
+            : { action: params.action, comments: result.comments };
+          text = result.comments
+            ? `Listed ${result.comments.length} comments.\n${linesFromGenericItems(
+                result.comments.map(
+                  (comment) =>
+                    `${comment.userName ?? "Unknown"}: ${comment.body}`,
+                ),
+                "comments",
+              )}`
+            : "";
+          break;
+        }
+        case "comment_create": {
+          const result = await createIssueComment(client, {
+            issueId: String(params.id ?? ""),
+            body: String(params.body ?? ""),
+          });
+          details = result.error
+            ? { action: params.action, error: result.error }
+            : {
+                action: params.action,
+                comments: result.comment ? [result.comment] : [],
+              };
+          if (result.comment) text = `Created comment ${result.comment.id}.`;
+          break;
+        }
+        case "comment_update": {
+          const result = await updateIssueComment(client, {
+            id: String(params.commentId ?? ""),
+            body: String(params.body ?? ""),
+          });
+          details = result.error
+            ? { action: params.action, error: result.error }
+            : {
+                action: params.action,
+                comments: result.comment ? [result.comment] : [],
+              };
+          if (result.comment) text = `Updated comment ${result.comment.id}.`;
+          break;
+        }
+        case "comment_delete": {
+          const result = await deleteIssueComment(client, {
+            id: String(params.commentId ?? ""),
+          });
+          details = result.error
+            ? { action: params.action, error: result.error }
+            : { action: params.action, deleted: result.deleted };
+          text = result.deleted
+            ? `Deleted comment ${String(params.commentId ?? "")}.`
+            : "";
+          break;
+        }
+        case "attachments_list": {
+          const result = await listIssueAttachments(client, {
+            issueId: String(params.id ?? ""),
+          });
+          details = result.error
+            ? { action: params.action, error: result.error }
+            : { action: params.action, attachments: result.attachments };
+          text = result.attachments
+            ? `Listed ${result.attachments.length} attachments.\n${linesFromGenericItems(
+                result.attachments.map(
+                  (attachment) => `${attachment.title} | ${attachment.url}`,
+                ),
+                "attachments",
+              )}`
+            : "";
+          break;
+        }
+        case "attachment_create": {
+          const result = await createIssueAttachment(client, {
+            issueId: String(params.id ?? ""),
+            url: String(params.url ?? ""),
+            title: typeof params.title === "string" ? params.title : undefined,
+          });
+          details = result.error
+            ? { action: params.action, error: result.error }
+            : {
+                action: params.action,
+                attachments: result.attachment ? [result.attachment] : [],
+              };
+          if (result.attachment)
+            text = `Created attachment ${result.attachment.title}.`;
+          break;
+        }
+        case "relations_list": {
+          const result = await listIssueRelations(client, {
+            issueId: String(params.id ?? ""),
+            includeInverseRelations: Boolean(params.includeInverseRelations),
+          });
+          details = result.error
+            ? { action: params.action, error: result.error }
+            : { action: params.action, relations: result.relations };
+          text = result.relations
+            ? `Listed ${result.relations.length} relations.\n${linesFromGenericItems(
+                result.relations.map((relation) =>
+                  `${relation.type} ${relation.relatedIssueIdentifier ?? relation.relatedIssueId ?? "unknown"} ${relation.relatedIssueTitle ?? ""}`.trim(),
+                ),
+                "relations",
+              )}`
+            : "";
+          break;
+        }
+        case "relation_create": {
+          const result = await createIssueRelation(client, {
+            issueId: String(params.id ?? ""),
+            relatedIssueId: String(params.relatedIssueId ?? ""),
+            type: String(params.relationType ?? ""),
+          });
+          details = result.error
+            ? { action: params.action, error: result.error }
+            : {
+                action: params.action,
+                relations: result.relation ? [result.relation] : [],
+              };
+          if (result.relation)
+            text = `Created relation ${result.relation.type}.`;
+          break;
+        }
+        case "relation_update": {
+          const result = await updateIssueRelation(client, {
+            id: String(params.relationId ?? ""),
+            type:
+              typeof params.relationType === "string"
+                ? params.relationType
+                : undefined,
+          });
+          details = result.error
+            ? { action: params.action, error: result.error }
+            : {
+                action: params.action,
+                relations: result.relation ? [result.relation] : [],
+              };
+          if (result.relation) text = `Updated relation ${result.relation.id}.`;
+          break;
+        }
+        case "relation_delete": {
+          const result = await deleteIssueRelation(client, {
+            id: String(params.relationId ?? ""),
+          });
+          details = result.error
+            ? { action: params.action, error: result.error }
+            : { action: params.action, deleted: result.deleted };
+          text = result.deleted
+            ? `Deleted relation ${String(params.relationId ?? "")}.`
+            : "";
+          break;
+        }
+        case "documents_list": {
+          const result = await listIssueDocuments(client, {
+            issueId: String(params.id ?? ""),
+          });
+          details = result.error
+            ? { action: params.action, error: result.error }
+            : { action: params.action, documents: result.documents };
+          text = result.documents
+            ? `Listed ${result.documents.length} documents.\n${linesFromGenericItems(
+                result.documents.map(
+                  (document) => `${document.title} | ${document.url}`,
+                ),
+                "documents",
+              )}`
+            : "";
+          break;
+        }
+        default:
+          details = {
             action: params.action,
-            issues: result.issues,
-            totalCount: result.totalCount,
-          },
+            error: `Unknown action: ${params.action}`,
+          };
+      }
+
+      if (details.error) {
+        return {
+          content: [{ type: "text", text: `Error: ${details.error}` }],
+          details,
         };
       }
 
-      const issue = (
-        "issue" in result ? result.issue : undefined
-      ) as SerializedIssue;
-      const children = ("children" in result ? result.children : undefined) as
-        | SerializedIssue[]
-        | undefined;
-      const verb =
-        params.action === "create"
-          ? "Created"
-          : params.action === "update"
-            ? "Updated"
-            : "Found";
-      const summary = [
-        `${verb} issue ${issue.identifier}: ${issue.title}`,
-        `Status: ${issue.state} | Priority: ${issue.priorityLabel} | Team: ${issue.team}`,
-      ];
-      if (issue.project) summary.push(`Project: ${issue.project}`);
-      if (issue.assignee) summary.push(`Assignee: ${issue.assignee}`);
-      summary.push(`URL: ${issue.url}`);
-      if (issue.description) summary.push(`\n${issue.description}`);
-      if (children && children.length > 0) {
-        summary.push(`\nSub-issues (${children.length}):`);
-        for (const child of children) {
-          summary.push(
-            `  ${child.identifier}: ${child.title} | ${child.state} | ${child.priorityLabel}`,
-          );
-        }
-      }
       return {
-        content: [{ type: "text", text: summary.join("\n") }],
-        details: { action: params.action, issue, children },
+        content: [{ type: "text", text: text || "Done." }],
+        details,
       };
     },
 
     renderCall(args: IssuesParamsType, theme: Theme) {
       const action = String(args.action ?? "");
-      switch (action) {
-        case "show":
-          return new ToolCallHeader(
-            {
-              toolName: "Linear Issues",
-              action: "Show",
-              mainArg: String(args.id ?? ""),
-            },
-            theme,
-          );
-        case "create":
-          return new ToolCallHeader(
-            {
-              toolName: "Linear Issues",
-              action: "Create",
-              mainArg: String(args.title ?? ""),
-            },
-            theme,
-          );
-        case "list":
-          return new ToolCallHeader(
-            { toolName: "Linear Issues", action: "List" },
-            theme,
-          );
-        case "search":
-          return new ToolCallHeader(
-            {
-              toolName: "Linear Issues",
-              action: "Search",
-              mainArg: String(args.query ?? ""),
-            },
-            theme,
-          );
-        case "update":
-          return new ToolCallHeader(
-            {
-              toolName: "Linear Issues",
-              action: "Update",
-              mainArg: String(args.id ?? ""),
-            },
-            theme,
-          );
-        default:
-          return new ToolCallHeader(
-            { toolName: "Linear Issues", action },
-            theme,
-          );
-      }
+      const mainArg =
+        String(
+          args.title ??
+            args.id ??
+            args.query ??
+            args.commentId ??
+            args.relationId ??
+            args.relatedIssueId ??
+            "",
+        ) || undefined;
+      return new ToolCallHeader(
+        {
+          toolName: "Linear Issues",
+          action: action.replaceAll("_", " "),
+          mainArg,
+        },
+        theme,
+      );
     },
 
     renderResult(
@@ -390,11 +600,13 @@ export function registerIssuesTool(pi: ExtensionAPI) {
       theme: Theme,
     ) {
       const { details } = result;
+      const fallbackText = result.content[0];
 
       if (!details) {
-        const text = result.content[0];
         return new Text(
-          text?.type === "text" && text.text ? text.text : "No result",
+          fallbackText?.type === "text" && fallbackText.text
+            ? fallbackText.text
+            : "No result",
           0,
           0,
         );
@@ -476,44 +688,53 @@ export function registerIssuesTool(pi: ExtensionAPI) {
         );
       }
 
-      const issue = details.issue;
-      if (!issue) {
-        return new Text(theme.fg("warning", "No issue returned"), 0, 0);
+      if (details.issue) {
+        const issue = details.issue;
+        const titleText = new Text(
+          `${theme.fg("accent", theme.bold(issue.identifier))} ${issue.title}`,
+          0,
+          0,
+        );
+        Object.assign(titleText, { showCollapsed: true });
+
+        const fields: Array<
+          | { label: string; value: string; showCollapsed?: boolean }
+          | (Component & { showCollapsed?: boolean })
+        > = [titleText];
+
+        if (options.expanded) {
+          for (const component of renderIssueExpanded(issue, theme))
+            fields.push(component);
+          if (details.children && details.children.length > 0) {
+            fields.push(...renderIssueChildren(details.children, theme));
+          }
+        }
+
+        return new ToolBody(
+          {
+            fields,
+            footer: new ToolFooter(theme, {
+              items: [
+                { label: "Status", value: issue.state, tone: "accent" },
+                {
+                  label: "Priority",
+                  value: issue.priorityLabel,
+                  tone: "muted",
+                },
+              ],
+            }),
+          },
+          options,
+          theme,
+        );
       }
 
-      const titleText = new Text(
-        `${theme.fg("accent", theme.bold(issue.identifier))} ${issue.title}`,
+      return new Text(
+        fallbackText?.type === "text" && fallbackText.text
+          ? fallbackText.text
+          : "Done.",
         0,
         0,
-      );
-      Object.assign(titleText, { showCollapsed: true });
-
-      const fields: Array<
-        | { label: string; value: string; showCollapsed?: boolean }
-        | (Component & { showCollapsed?: boolean })
-      > = [titleText];
-
-      if (options.expanded) {
-        for (const component of renderIssueExpanded(issue, theme)) {
-          fields.push(component);
-        }
-        if (details.children && details.children.length > 0) {
-          fields.push(...renderIssueChildren(details.children, theme));
-        }
-      }
-
-      return new ToolBody(
-        {
-          fields,
-          footer: new ToolFooter(theme, {
-            items: [
-              { label: "Status", value: issue.state, tone: "accent" },
-              { label: "Priority", value: issue.priorityLabel, tone: "muted" },
-            ],
-          }),
-        },
-        options,
-        theme,
       );
     },
   });

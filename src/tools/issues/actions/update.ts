@@ -1,6 +1,8 @@
 import type { LinearClient } from "@linear/sdk";
+import { resolveProjectId } from "../../projects/lookup";
 import { serializeIssue } from "../serialize";
 import type { SerializedIssue } from "../types";
+import { resolveIssueProjectMilestoneId } from "./helpers";
 
 export interface UpdateIssueParams {
   id?: string;
@@ -10,6 +12,9 @@ export interface UpdateIssueParams {
   priority?: number;
   stateId?: string;
   projectId?: string;
+  projectName?: string;
+  projectMilestoneId?: string;
+  projectMilestoneName?: string;
   labelIds?: string[];
   dueDate?: string;
   estimate?: number;
@@ -31,13 +36,29 @@ export async function updateIssue(
   }
 
   try {
+    const resolvedProjectId =
+      params.projectId || params.projectName
+        ? await resolveProjectId(client, params.projectId, params.projectName)
+        : undefined;
+    const { milestoneId, error } = await resolveIssueProjectMilestoneId(
+      client,
+      {
+        projectId: resolvedProjectId,
+        projectName: params.projectName,
+        projectMilestoneId: params.projectMilestoneId,
+        projectMilestoneName: params.projectMilestoneName,
+      },
+    );
+    if (error) return { error };
+
     const payload = await client.updateIssue(params.id, {
       title: params.title,
       description: params.description,
       assigneeId: params.assigneeId,
       priority: params.priority,
       stateId: params.stateId,
-      projectId: params.projectId,
+      projectId: resolvedProjectId ?? params.projectId,
+      projectMilestoneId: milestoneId,
       labelIds: params.labelIds,
       dueDate: params.dueDate,
       estimate: params.estimate,

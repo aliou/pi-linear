@@ -12,31 +12,68 @@ import { Type } from "@sinclair/typebox";
 import { getLinearClient, LINEAR_CREDENTIALS_ERROR } from "../../client";
 import { type CreateProjectParams, createProject } from "./actions/create";
 import { type ListProjectsParams, listProjects } from "./actions/list";
+import { createProjectRelation } from "./actions/relation-create";
+import { deleteProjectRelation } from "./actions/relation-delete";
+import { updateProjectRelation } from "./actions/relation-update";
+import { listProjectRelations } from "./actions/relations-list";
 import { type ShowProjectParams, showProject } from "./actions/show";
 import { type UpdateProjectParams, updateProject } from "./actions/update";
+import type { SerializedProjectRelation } from "./milestone-types";
 import { renderProjectExpanded } from "./render";
 import type { SerializedProject } from "./types";
 
+const actionValues = [
+  "show",
+  "create",
+  "list",
+  "update",
+  "relations_list",
+  "relation_create",
+  "relation_update",
+  "relation_delete",
+] as const;
+
 const ProjectsParams = Type.Object({
   action: Type.Union(
-    [
-      Type.Literal("show"),
-      Type.Literal("create"),
-      Type.Literal("list"),
-      Type.Literal("update"),
-    ],
+    actionValues.map((value) => Type.Literal(value)),
     {
-      description: "Action to perform: show, create, list, or update projects.",
+      description: "Project action to perform.",
     },
   ),
   id: Type.Optional(
-    Type.String({ description: "Project ID. Required for show and update." }),
+    Type.String({
+      description:
+        "Project ID. Required for show/update and project relation actions.",
+    }),
   ),
+  relationId: Type.Optional(
+    Type.String({ description: "Project relation ID." }),
+  ),
+  relatedProjectId: Type.Optional(
+    Type.String({ description: "Related project ID." }),
+  ),
+  anchorType: Type.Optional(
+    Type.String({ description: "Project anchor type. Default project." }),
+  ),
+  relatedAnchorType: Type.Optional(
+    Type.String({
+      description: "Related project anchor type. Default project.",
+    }),
+  ),
+  projectMilestoneId: Type.Optional(
+    Type.String({ description: "Project milestone ID for project relations." }),
+  ),
+  relatedProjectMilestoneId: Type.Optional(
+    Type.String({
+      description: "Related project milestone ID for project relations.",
+    }),
+  ),
+  type: Type.Optional(Type.String({ description: "Relation type." })),
   limit: Type.Optional(
     Type.Number({ description: "Maximum results to return for list." }),
   ),
   includeArchived: Type.Optional(
-    Type.Boolean({ description: "Include archived projects in list." }),
+    Type.Boolean({ description: "Include archived projects in list actions." }),
   ),
   statusId: Type.Optional(Type.String({ description: "Project status ID." })),
   statusName: Type.Optional(
@@ -82,11 +119,13 @@ interface ProjectsDetails {
   action: string;
   project?: SerializedProject;
   projects?: SerializedProject[];
+  relation?: SerializedProjectRelation;
+  relations?: SerializedProjectRelation[];
+  deleted?: boolean;
   error?: string;
 }
 
 type ExecuteResult = AgentToolResult<ProjectsDetails>;
-
 const COLLAPSED_MAX = 5;
 const CONTENT_MAX = 20;
 
@@ -106,7 +145,6 @@ function formatProjectForContent(project: SerializedProject): string {
 function formatProjectListContent(projects: SerializedProject[]): string {
   const header = `Listed ${projects.length} projects.`;
   if (projects.length === 0) return header;
-
   const lines = projects
     .slice(0, CONTENT_MAX)
     .map((project) => `- ${formatProjectForContent(project)}`);
@@ -145,11 +183,20 @@ function renderProjectListItem(project: SerializedProject, theme: Theme): Text {
   );
 }
 
+function formatLines(items: string[], emptyLabel: string): string {
+  if (items.length === 0) return emptyLabel;
+  const lines = items.slice(0, CONTENT_MAX).map((item) => `- ${item}`);
+  if (items.length > CONTENT_MAX) {
+    lines.push(`- + ${items.length - CONTENT_MAX} more`);
+  }
+  return lines.join("\n");
+}
+
 export function registerProjectsTool(pi: ExtensionAPI) {
   pi.registerTool<typeof ProjectsParams, ProjectsDetails>({
     name: "linear_projects",
     label: "Linear: Projects",
-    description: "Manage Linear projects. Actions: show, create, list, update.",
+    description: "Manage Linear projects and project relations.",
     parameters: ProjectsParams,
 
     async execute(
@@ -174,119 +221,191 @@ export function registerProjectsTool(pi: ExtensionAPI) {
         details: { action: params.action },
       });
 
-      let result:
-        | { project?: SerializedProject; error?: string }
-        | { projects?: SerializedProject[]; error?: string };
+      let details: ProjectsDetails;
+      let text = "";
 
       switch (params.action) {
-        case "show":
-          result = await showProject(
+        case "show": {
+          const result = await showProject(
             client,
             params as unknown as ShowProjectParams,
           );
+          details = result.error
+            ? { action: params.action, error: result.error }
+            : { action: params.action, project: result.project };
+          if (result.project) text = `Found project ${result.project.name}.`;
           break;
-        case "create":
-          result = await createProject(
+        }
+        case "create": {
+          const result = await createProject(
             client,
             params as unknown as CreateProjectParams,
           );
+          details = result.error
+            ? { action: params.action, error: result.error }
+            : { action: params.action, project: result.project };
+          if (result.project) text = `Created project ${result.project.name}.`;
           break;
-        case "list":
-          result = await listProjects(
-            client,
-            params as unknown as ListProjectsParams,
-          );
-          break;
-        case "update":
-          result = await updateProject(
+        }
+        case "update": {
+          const result = await updateProject(
             client,
             params as unknown as UpdateProjectParams,
           );
+          details = result.error
+            ? { action: params.action, error: result.error }
+            : { action: params.action, project: result.project };
+          if (result.project) text = `Updated project ${result.project.name}.`;
           break;
+        }
+        case "list": {
+          const result = await listProjects(
+            client,
+            params as unknown as ListProjectsParams,
+          );
+          details = result.error
+            ? { action: params.action, error: result.error }
+            : { action: params.action, projects: result.projects };
+          text = result.projects
+            ? formatProjectListContent(result.projects)
+            : "";
+          break;
+        }
+        case "relations_list": {
+          const result = await listProjectRelations(client, {
+            id: typeof params.id === "string" ? params.id : undefined,
+          });
+          details = result.error
+            ? { action: params.action, error: result.error }
+            : { action: params.action, relations: result.relations };
+          text = result.relations
+            ? `Listed ${result.relations.length} project relations.\n${formatLines(
+                result.relations.map(
+                  (relation) =>
+                    `${relation.type} ${relation.relatedProjectName ?? relation.relatedProjectId}`,
+                ),
+                "No project relations found.",
+              )}`
+            : "";
+          break;
+        }
+        case "relation_create": {
+          const result = await createProjectRelation(client, {
+            projectId: typeof params.id === "string" ? params.id : undefined,
+            relatedProjectId:
+              typeof params.relatedProjectId === "string"
+                ? params.relatedProjectId
+                : undefined,
+            type: typeof params.type === "string" ? params.type : undefined,
+            anchorType:
+              typeof params.anchorType === "string"
+                ? params.anchorType
+                : undefined,
+            relatedAnchorType:
+              typeof params.relatedAnchorType === "string"
+                ? params.relatedAnchorType
+                : undefined,
+            projectMilestoneId:
+              typeof params.projectMilestoneId === "string"
+                ? params.projectMilestoneId
+                : undefined,
+            relatedProjectMilestoneId:
+              typeof params.relatedProjectMilestoneId === "string"
+                ? params.relatedProjectMilestoneId
+                : undefined,
+          });
+          details = result.error
+            ? { action: params.action, error: result.error }
+            : { action: params.action, relation: result.relation };
+          if (result.relation) {
+            text = `Created project relation ${result.relation.type}.`;
+          }
+          break;
+        }
+        case "relation_update": {
+          const result = await updateProjectRelation(client, {
+            relationId:
+              typeof params.relationId === "string"
+                ? params.relationId
+                : undefined,
+            projectId: typeof params.id === "string" ? params.id : undefined,
+            relatedProjectId:
+              typeof params.relatedProjectId === "string"
+                ? params.relatedProjectId
+                : undefined,
+            type: typeof params.type === "string" ? params.type : undefined,
+            anchorType:
+              typeof params.anchorType === "string"
+                ? params.anchorType
+                : undefined,
+            relatedAnchorType:
+              typeof params.relatedAnchorType === "string"
+                ? params.relatedAnchorType
+                : undefined,
+            projectMilestoneId:
+              typeof params.projectMilestoneId === "string"
+                ? params.projectMilestoneId
+                : undefined,
+            relatedProjectMilestoneId:
+              typeof params.relatedProjectMilestoneId === "string"
+                ? params.relatedProjectMilestoneId
+                : undefined,
+          });
+          details = result.error
+            ? { action: params.action, error: result.error }
+            : { action: params.action, relation: result.relation };
+          if (result.relation) {
+            text = `Updated project relation ${result.relation.id}.`;
+          }
+          break;
+        }
+        case "relation_delete": {
+          const result = await deleteProjectRelation(client, {
+            relationId:
+              typeof params.relationId === "string"
+                ? params.relationId
+                : undefined,
+          });
+          details = result.error
+            ? { action: params.action, error: result.error }
+            : { action: params.action, deleted: result.deleted };
+          if (result.deleted) {
+            text = `Deleted project relation ${String(params.relationId ?? "")}.`;
+          }
+          break;
+        }
         default:
-          result = { error: `Unknown action: ${params.action}` };
+          details = {
+            action: params.action,
+            error: `Unknown action: ${params.action}`,
+          };
       }
 
-      if (result.error) {
+      if (details.error) {
         return {
-          content: [{ type: "text", text: `Error: ${result.error}` }],
-          details: { action: params.action, error: result.error },
+          content: [{ type: "text", text: `Error: ${details.error}` }],
+          details,
         };
       }
 
-      if ("projects" in result && result.projects) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: formatProjectListContent(result.projects),
-            },
-          ],
-          details: { action: params.action, projects: result.projects },
-        };
-      }
-
-      const project = (
-        "project" in result ? result.project : undefined
-      ) as SerializedProject;
-      const verb =
-        params.action === "create"
-          ? "Created"
-          : params.action === "update"
-            ? "Updated"
-            : "Found";
-      const summary = [
-        `${verb} project: ${project.name} (id=${project.id})`,
-        `Status: ${project.state} | Priority: ${project.priorityLabel} | Progress: ${Math.round(project.progress * 100)}%`,
-      ];
-      if (project.lead) summary.push(`Lead: ${project.lead}`);
-      if (project.teams.length > 0)
-        summary.push(`Teams: ${project.teams.join(", ")}`);
-      summary.push(`URL: ${project.url}`);
-      if (project.description) summary.push(`\n${project.description}`);
       return {
-        content: [{ type: "text", text: summary.join("\n") }],
-        details: { action: params.action, project },
+        content: [{ type: "text", text: text || "Done." }],
+        details,
       };
     },
 
     renderCall(args: ProjectsParamsType, theme: Theme) {
       const action = String(args.action ?? "");
-      switch (action) {
-        case "show":
-          return new ToolCallHeader(
-            { toolName: "Linear Projects", action: "Show" },
-            theme,
-          );
-        case "create":
-          return new ToolCallHeader(
-            {
-              toolName: "Linear Projects",
-              action: "Create",
-              mainArg: String(args.name ?? ""),
-            },
-            theme,
-          );
-        case "list":
-          return new ToolCallHeader(
-            { toolName: "Linear Projects", action: "List" },
-            theme,
-          );
-        case "update":
-          return new ToolCallHeader(
-            {
-              toolName: "Linear Projects",
-              action: "Update",
-              mainArg: String(args.id ?? ""),
-            },
-            theme,
-          );
-        default:
-          return new ToolCallHeader(
-            { toolName: "Linear Projects", action },
-            theme,
-          );
-      }
+      const mainArg =
+        String(args.name ?? args.id ?? args.relationId ?? "") || undefined;
+      return new ToolCallHeader(
+        {
+          toolName: "Linear Projects",
+          action: action.replaceAll("_", " "),
+          mainArg,
+        },
+        theme,
+      );
     },
 
     renderResult(
@@ -295,11 +414,13 @@ export function registerProjectsTool(pi: ExtensionAPI) {
       theme: Theme,
     ) {
       const { details } = result;
+      const fallbackText = result.content[0];
 
       if (!details) {
-        const text = result.content[0];
         return new Text(
-          text?.type === "text" && text.text ? text.text : "No result",
+          fallbackText?.type === "text" && fallbackText.text
+            ? fallbackText.text
+            : "No result",
           0,
           0,
         );
@@ -370,45 +491,51 @@ export function registerProjectsTool(pi: ExtensionAPI) {
         );
       }
 
-      const project = details.project;
-      if (!project) {
-        return new Text(theme.fg("warning", "No project returned"), 0, 0);
-      }
-
-      const titleParts = [theme.fg("accent", theme.bold(project.name))];
-      if (project.description) {
-        titleParts.push(theme.fg("dim", project.description));
-      }
-      const titleText = new Text(titleParts.join(" - "), 0, 0);
-      Object.assign(titleText, { showCollapsed: true });
-
-      const fields: Array<
-        | { label: string; value: string; showCollapsed?: boolean }
-        | (Component & { showCollapsed?: boolean })
-      > = [titleText];
-
-      if (options.expanded) {
-        for (const component of renderProjectExpanded(project, theme)) {
-          fields.push(component);
+      if (details.project) {
+        const project = details.project;
+        const titleParts = [theme.fg("accent", theme.bold(project.name))];
+        if (project.description) {
+          titleParts.push(theme.fg("dim", project.description));
         }
+        const titleText = new Text(titleParts.join(" - "), 0, 0);
+        Object.assign(titleText, { showCollapsed: true });
+
+        const fields: Array<
+          | { label: string; value: string; showCollapsed?: boolean }
+          | (Component & { showCollapsed?: boolean })
+        > = [titleText];
+
+        if (options.expanded) {
+          for (const component of renderProjectExpanded(project, theme)) {
+            fields.push(component);
+          }
+        }
+
+        return new ToolBody(
+          {
+            fields,
+            footer: new ToolFooter(theme, {
+              items: [
+                { label: "Status", value: project.state, tone: "accent" },
+                {
+                  label: "Priority",
+                  value: project.priorityLabel,
+                  tone: "muted",
+                },
+              ],
+            }),
+          },
+          options,
+          theme,
+        );
       }
 
-      return new ToolBody(
-        {
-          fields,
-          footer: new ToolFooter(theme, {
-            items: [
-              { label: "Status", value: project.state, tone: "accent" },
-              {
-                label: "Priority",
-                value: project.priorityLabel,
-                tone: "muted",
-              },
-            ],
-          }),
-        },
-        options,
-        theme,
+      return new Text(
+        fallbackText?.type === "text" && fallbackText.text
+          ? fallbackText.text
+          : "Done.",
+        0,
+        0,
       );
     },
   });
