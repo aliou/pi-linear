@@ -10,6 +10,7 @@ export interface SerializedIssue {
   description?: string;
   state: string;
   assignee?: string;
+  delegate?: string;
   priority: number;
   priorityLabel: string;
   url: string;

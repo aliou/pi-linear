@@ -230,6 +230,8 @@ function renderIssueOneLiner(issue: SerializedIssue, theme: Theme): Text {
     issue.state,
     issue.priorityLabel,
   ];
+  if (issue.assignee)
+    parts.push(`${theme.fg("muted", "Assignee: ")}${issue.assignee}`);
   return new Text(parts.join(theme.fg("dim", " | ")), 0, 0);
 }
 

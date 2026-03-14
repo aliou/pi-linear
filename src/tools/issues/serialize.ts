@@ -3,16 +3,22 @@ import type { SerializedIssue } from "./types";
 
 /** Resolve lazy SDK refs on an Issue into a plain object. */
 export async function serializeIssue(issue: Issue): Promise<SerializedIssue> {
-  const [state, assignee, project, team, labels, milestone] = await Promise.all(
-    [
+  const [state, assignee, delegate, project, team, labels, milestone] =
+    await Promise.all([
       issue.state,
       issue.assignee,
+      issue.delegate,
       issue.project,
       issue.team,
       issue.labels(),
       issue.projectMilestone,
-    ],
-  );
+    ]);
+
+  const assigneeDisplay = delegate?.displayName
+    ? assignee?.displayName
+      ? `${delegate.displayName} (via ${assignee.displayName})`
+      : delegate.displayName
+    : assignee?.displayName;
 
   return {
     id: issue.id,
@@ -20,7 +26,8 @@ export async function serializeIssue(issue: Issue): Promise<SerializedIssue> {
     title: issue.title,
     description: issue.description ?? undefined,
     state: state?.name ?? "Unknown",
-    assignee: assignee?.displayName,
+    assignee: assigneeDisplay,
+    delegate: delegate?.displayName,
     priority: issue.priority,
     priorityLabel: issue.priorityLabel,
     url: issue.url,

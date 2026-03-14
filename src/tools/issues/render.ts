@@ -69,6 +69,10 @@ export function renderIssueChildren(
       theme.fg("dim", "|"),
       child.priorityLabel,
     ];
+    if (child.assignee) {
+      parts.push(theme.fg("dim", "|"));
+      parts.push(theme.fg("muted", `Assignee: ${child.assignee}`));
+    }
     components.push(new Text(parts.join(" "), 0, 0));
   }
   return components;
