@@ -41,6 +41,36 @@ function createApiKeySubmenu(
   });
 }
 
+function createAccessTokenSubmenu(
+  currentValue: string,
+  done: (selectedValue?: string) => void,
+  theme: SettingsListTheme,
+  saveDraft: (accessToken: string) => void,
+): Component {
+  let value = currentValue === "(not set)" ? "" : currentValue;
+
+  return new SettingsDetailEditor({
+    title: "OAuth Token",
+    theme,
+    onDone: () => done(value || undefined),
+    fields: [
+      {
+        id: "accessToken",
+        label: "OAuth Token",
+        type: "text",
+        description:
+          "OAuth access token from a Linear app. Falls back to LINEAR_OAUTH_TOKEN env var if not set.",
+        getValue: () => value,
+        setValue: (v) => {
+          value = v;
+          saveDraft(v);
+        },
+        emptyValueText: "(not set)",
+      },
+    ],
+  });
+}
+
 export function registerLinearSettings(pi: ExtensionAPI): void {
   registerSettingsCommand<LinearConfig, ResolvedLinearConfig>(pi, {
     commandName: "linear:settings",
@@ -72,6 +102,27 @@ export function registerLinearSettings(pi: ExtensionAPI): void {
                   draft.apiKey = apiKey || undefined;
                   ctx.setDraft(draft);
                 }),
+            },
+            {
+              id: "accessToken",
+              label: "OAuth Token",
+              description:
+                "OAuth access token from a Linear app. Falls back to LINEAR_OAUTH_TOKEN env var if not set.",
+              currentValue:
+                (tabConfig?.accessToken ?? resolved.accessToken) || "(not set)",
+              submenu: (currentValue, done) =>
+                createAccessTokenSubmenu(
+                  currentValue,
+                  done,
+                  ctx.theme,
+                  (accessToken) => {
+                    const draft = structuredClone(
+                      tabConfig ?? ({} as LinearConfig),
+                    );
+                    draft.accessToken = accessToken || undefined;
+                    ctx.setDraft(draft);
+                  },
+                ),
             },
           ],
         },
