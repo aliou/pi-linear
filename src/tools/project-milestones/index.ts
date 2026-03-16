@@ -134,8 +134,21 @@ export function registerProjectMilestonesTool(pi: ExtensionAPI) {
           details = result.error
             ? { action: params.action, error: result.error }
             : { action: params.action, milestone: result.milestone };
-          if (result.milestone)
-            text = `Found milestone ${result.milestone.name}.`;
+          if (result.milestone) {
+            text = JSON.stringify(
+              {
+                id: result.milestone.id,
+                name: result.milestone.name,
+                status: result.milestone.status,
+                progress: Math.round(result.milestone.progress * 100),
+                targetDate: result.milestone.targetDate,
+                projectName: result.milestone.projectName,
+                description: result.milestone.description,
+              },
+              null,
+              2,
+            );
+          }
           break;
         }
         case "create": {
@@ -161,8 +174,21 @@ export function registerProjectMilestonesTool(pi: ExtensionAPI) {
           details = result.error
             ? { action: params.action, error: result.error }
             : { action: params.action, milestone: result.milestone };
-          if (result.milestone)
-            text = `Created milestone ${result.milestone.name}.`;
+          if (result.milestone) {
+            text = JSON.stringify(
+              {
+                id: result.milestone.id,
+                name: result.milestone.name,
+                status: result.milestone.status,
+                progress: Math.round(result.milestone.progress * 100),
+                targetDate: result.milestone.targetDate,
+                projectName: result.milestone.projectName,
+                description: result.milestone.description,
+              },
+              null,
+              2,
+            );
+          }
           break;
         }
         case "update": {
@@ -192,8 +218,21 @@ export function registerProjectMilestonesTool(pi: ExtensionAPI) {
           details = result.error
             ? { action: params.action, error: result.error }
             : { action: params.action, milestone: result.milestone };
-          if (result.milestone)
-            text = `Updated milestone ${result.milestone.name}.`;
+          if (result.milestone) {
+            text = JSON.stringify(
+              {
+                id: result.milestone.id,
+                name: result.milestone.name,
+                status: result.milestone.status,
+                progress: Math.round(result.milestone.progress * 100),
+                targetDate: result.milestone.targetDate,
+                projectName: result.milestone.projectName,
+                description: result.milestone.description,
+              },
+              null,
+              2,
+            );
+          }
           break;
         }
         case "delete": {

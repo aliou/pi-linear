@@ -233,7 +233,26 @@ export function registerProjectsTool(pi: ExtensionAPI) {
           details = result.error
             ? { action: params.action, error: result.error }
             : { action: params.action, project: result.project };
-          if (result.project) text = `Found project ${result.project.name}.`;
+          if (result.project) {
+            text = JSON.stringify(
+              {
+                id: result.project.id,
+                name: result.project.name,
+                state: result.project.state,
+                priority: result.project.priorityLabel,
+                progress: Math.round(result.project.progress * 100),
+                lead: result.project.lead,
+                teams: result.project.teams,
+                startDate: result.project.startDate,
+                targetDate: result.project.targetDate,
+                links: result.project.links,
+                documents: result.project.documents,
+                url: result.project.url,
+              },
+              null,
+              2,
+            );
+          }
           break;
         }
         case "create": {
@@ -244,7 +263,26 @@ export function registerProjectsTool(pi: ExtensionAPI) {
           details = result.error
             ? { action: params.action, error: result.error }
             : { action: params.action, project: result.project };
-          if (result.project) text = `Created project ${result.project.name}.`;
+          if (result.project) {
+            text = JSON.stringify(
+              {
+                id: result.project.id,
+                name: result.project.name,
+                state: result.project.state,
+                priority: result.project.priorityLabel,
+                progress: Math.round(result.project.progress * 100),
+                lead: result.project.lead,
+                teams: result.project.teams,
+                startDate: result.project.startDate,
+                targetDate: result.project.targetDate,
+                links: result.project.links,
+                documents: result.project.documents,
+                url: result.project.url,
+              },
+              null,
+              2,
+            );
+          }
           break;
         }
         case "update": {
@@ -255,7 +293,26 @@ export function registerProjectsTool(pi: ExtensionAPI) {
           details = result.error
             ? { action: params.action, error: result.error }
             : { action: params.action, project: result.project };
-          if (result.project) text = `Updated project ${result.project.name}.`;
+          if (result.project) {
+            text = JSON.stringify(
+              {
+                id: result.project.id,
+                name: result.project.name,
+                state: result.project.state,
+                priority: result.project.priorityLabel,
+                progress: Math.round(result.project.progress * 100),
+                lead: result.project.lead,
+                teams: result.project.teams,
+                startDate: result.project.startDate,
+                targetDate: result.project.targetDate,
+                links: result.project.links,
+                documents: result.project.documents,
+                url: result.project.url,
+              },
+              null,
+              2,
+            );
+          }
           break;
         }
         case "list": {

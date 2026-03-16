@@ -134,8 +134,20 @@ export function registerDocumentsTool(pi: ExtensionAPI) {
           details = result.error
             ? { action: params.action, error: result.error }
             : { action: params.action, document: result.document };
-          if (result.document)
-            text = `Created document ${result.document.title}.`;
+          if (result.document) {
+            text = JSON.stringify(
+              {
+                id: result.document.id,
+                title: result.document.title,
+                url: result.document.url,
+                issueId: result.document.issueId,
+                projectId: result.document.projectId,
+                content: result.document.content,
+              },
+              null,
+              2,
+            );
+          }
           break;
         }
         case "update": {
@@ -154,8 +166,20 @@ export function registerDocumentsTool(pi: ExtensionAPI) {
           details = result.error
             ? { action: params.action, error: result.error }
             : { action: params.action, document: result.document };
-          if (result.document)
-            text = `Updated document ${result.document.title}.`;
+          if (result.document) {
+            text = JSON.stringify(
+              {
+                id: result.document.id,
+                title: result.document.title,
+                url: result.document.url,
+                issueId: result.document.issueId,
+                projectId: result.document.projectId,
+                content: result.document.content,
+              },
+              null,
+              2,
+            );
+          }
           break;
         }
         case "delete": {
