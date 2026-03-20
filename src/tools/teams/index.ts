@@ -1,4 +1,5 @@
 import { ToolBody, ToolCallHeader, ToolFooter } from "@aliou/pi-utils-ui";
+import { StringEnum } from "@mariozechner/pi-ai";
 import type {
   AgentToolResult,
   AgentToolUpdateCallback,
@@ -16,7 +17,7 @@ import type { SerializedTeam } from "./types";
 const COLLAPSED_MAX = 5;
 
 const TeamsParams = Type.Object({
-  action: Type.Union([Type.Literal("list")], {
+  action: StringEnum(["list"], {
     description: "Action to perform: list teams.",
   }),
   limit: Type.Optional(
@@ -84,6 +85,8 @@ export function registerTeamsTool(pi: ExtensionAPI) {
     name: "linear_teams",
     label: "Linear: Teams",
     description: "List active Linear teams in the workspace.",
+    promptSnippet:
+      "Use linear_teams to list all active teams in the Linear workspace and discover their IDs and keys.",
     parameters: TeamsParams,
 
     async execute(

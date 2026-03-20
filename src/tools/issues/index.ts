@@ -1,4 +1,5 @@
 import { ToolBody, ToolCallHeader, ToolFooter } from "@aliou/pi-utils-ui";
+import { StringEnum } from "@mariozechner/pi-ai";
 import type {
   AgentToolResult,
   AgentToolUpdateCallback,
@@ -55,12 +56,9 @@ const actionValues = [
 ] as const;
 
 const IssuesParams = Type.Object({
-  action: Type.Union(
-    actionValues.map((value) => Type.Literal(value)),
-    {
-      description: "Issue action to perform.",
-    },
-  ),
+  action: StringEnum([...actionValues], {
+    description: "Issue action to perform.",
+  }),
   id: Type.Optional(
     Type.String({
       description:
@@ -264,6 +262,13 @@ export function registerIssuesTool(pi: ExtensionAPI) {
     label: "Linear: Issues",
     description:
       "Manage Linear issues, comments, attachments, relations, and linked docs.",
+    promptSnippet:
+      "Use linear_issues to create, list, search, show, or update Linear issues and their comments, attachments, relations, and linked documents.",
+    promptGuidelines: [
+      "Prefer search over list when looking for specific issues.",
+      "Use teamKey or teamName instead of teamId when possible.",
+      "Always supply id for show/update.",
+    ],
     parameters: IssuesParams,
 
     async execute(

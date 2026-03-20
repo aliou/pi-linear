@@ -1,4 +1,5 @@
 import { ToolBody, ToolCallHeader, ToolFooter } from "@aliou/pi-utils-ui";
+import { StringEnum } from "@mariozechner/pi-ai";
 import type {
   AgentToolResult,
   AgentToolUpdateCallback,
@@ -34,12 +35,9 @@ const actionValues = [
 ] as const;
 
 const ProjectsParams = Type.Object({
-  action: Type.Union(
-    actionValues.map((value) => Type.Literal(value)),
-    {
-      description: "Project action to perform.",
-    },
-  ),
+  action: StringEnum([...actionValues], {
+    description: "Project action to perform.",
+  }),
   id: Type.Optional(
     Type.String({
       description:
@@ -197,6 +195,13 @@ export function registerProjectsTool(pi: ExtensionAPI) {
     name: "linear_projects",
     label: "Linear: Projects",
     description: "Manage Linear projects and project relations.",
+    promptSnippet:
+      "Use linear_projects to create, list, show, or update Linear projects and their relations.",
+    promptGuidelines: [
+      "Use teamKey or teamName instead of teamId when possible.",
+      "Supply id for show/update.",
+      "Use list to discover available projects.",
+    ],
     parameters: ProjectsParams,
 
     async execute(

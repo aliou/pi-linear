@@ -1,3 +1,4 @@
+import { StringEnum } from "@mariozechner/pi-ai";
 import type {
   AgentToolResult,
   AgentToolUpdateCallback,
@@ -16,16 +17,9 @@ import { updateDocument } from "./actions/update";
 import type { SerializedLinearDocument } from "./types";
 
 const DocumentsParams = Type.Object({
-  action: Type.Union(
-    [
-      Type.Literal("list"),
-      Type.Literal("show"),
-      Type.Literal("create"),
-      Type.Literal("update"),
-      Type.Literal("delete"),
-    ],
-    { description: "Document action to perform." },
-  ),
+  action: StringEnum(["list", "show", "create", "update", "delete"], {
+    description: "Document action to perform.",
+  }),
   id: Type.Optional(Type.String({ description: "Document ID." })),
   issueId: Type.Optional(
     Type.String({ description: "Issue ID for scoping or linking." }),
@@ -57,6 +51,12 @@ export function registerDocumentsTool(pi: ExtensionAPI) {
     name: "linear_documents",
     label: "Linear: Documents",
     description: "Manage Linear documents.",
+    promptSnippet:
+      "Use linear_documents to list, show, create, update, or delete Linear documents. Documents can be scoped to a project or issue.",
+    promptGuidelines: [
+      "Supply projectId or issueId to scope list/create.",
+      "Supply id for show/update/delete.",
+    ],
     parameters: DocumentsParams,
     async execute(
       _toolCallId: string,

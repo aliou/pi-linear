@@ -1,3 +1,4 @@
+import { StringEnum } from "@mariozechner/pi-ai";
 import type {
   AgentToolResult,
   AgentToolUpdateCallback,
@@ -16,16 +17,9 @@ import { listProjectMilestones } from "../projects/actions/milestones-list";
 import type { SerializedProjectMilestone } from "../projects/milestone-types";
 
 const ProjectMilestonesParams = Type.Object({
-  action: Type.Union(
-    [
-      Type.Literal("list"),
-      Type.Literal("show"),
-      Type.Literal("create"),
-      Type.Literal("update"),
-      Type.Literal("delete"),
-    ],
-    { description: "Project milestone action to perform." },
-  ),
+  action: StringEnum(["list", "show", "create", "update", "delete"], {
+    description: "Project milestone action to perform.",
+  }),
   projectId: Type.Optional(
     Type.String({
       description: "Project ID. Required for list and create.",
@@ -69,6 +63,12 @@ export function registerProjectMilestonesTool(pi: ExtensionAPI) {
     name: "linear_project_milestones",
     label: "Linear: Project Milestones",
     description: "Manage Linear project milestones.",
+    promptSnippet:
+      "Use linear_project_milestones to list, show, create, update, or delete milestones within a Linear project.",
+    promptGuidelines: [
+      "Supply projectId for list and create.",
+      "Supply milestoneId for show, update, and delete.",
+    ],
     parameters: ProjectMilestonesParams,
     async execute(
       _toolCallId: string,

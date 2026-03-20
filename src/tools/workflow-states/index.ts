@@ -1,3 +1,4 @@
+import { StringEnum } from "@mariozechner/pi-ai";
 import type {
   AgentToolResult,
   AgentToolUpdateCallback,
@@ -12,7 +13,7 @@ import { listWorkflowStates } from "./actions/list";
 import type { SerializedWorkflowState } from "./types";
 
 const TeamStatesParams = Type.Object({
-  action: Type.Union([Type.Literal("list")], {
+  action: StringEnum(["list"], {
     description: "Team state action to perform.",
   }),
   limit: Type.Optional(
@@ -36,6 +37,11 @@ export function registerTeamStatesTool(pi: ExtensionAPI) {
     name: "linear_team_states",
     label: "Linear: Team States",
     description: "List Linear team workflow states.",
+    promptSnippet:
+      "Use linear_team_states to list workflow states for a Linear team. Useful for resolving state IDs before creating or updating issues.",
+    promptGuidelines: [
+      "Supply teamKey or teamName to scope results to a specific team.",
+    ],
     parameters: TeamStatesParams,
     async execute(
       _toolCallId: string,
