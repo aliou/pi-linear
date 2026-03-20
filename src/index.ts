@@ -2,7 +2,6 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { hasLinearCredentials, LINEAR_CREDENTIALS_ERROR } from "./client";
 import { registerLinearSettings } from "./commands/settings";
 import { configLoader } from "./config";
-import { registerHooks } from "./hooks/index";
 import { registerTools } from "./tools/index";
 
 export default async function (pi: ExtensionAPI) {
@@ -24,5 +23,4 @@ export default async function (pi: ExtensionAPI) {
   }
 
   registerTools(pi);
-  registerHooks(pi);
 }
