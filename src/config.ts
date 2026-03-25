@@ -1,5 +1,18 @@
-import { buildSchemaUrl, ConfigLoader } from "@aliou/pi-utils-settings";
+import {
+  buildSchemaUrl,
+  ConfigLoader,
+  type Migration,
+} from "@aliou/pi-utils-settings";
 import pkg from "../package.json" with { type: "json" };
+
+export interface WorkspaceProfile {
+  /** Linear API key for this workspace. */
+  apiKey?: string;
+  /** Human-readable org name. */
+  orgName?: string;
+  /** Preferred default team key (e.g. ENG). */
+  defaultTeamKey?: string;
+}
 
 /**
  * Raw config shape (what gets saved to disk).
@@ -11,7 +24,11 @@ import pkg from "../package.json" with { type: "json" };
 export interface LinearConfig {
   /** Enable or disable the extension. */
   enabled?: boolean;
-  /** Linear API key. If not set, falls back to LINEAR_API_KEY env var. */
+  /** Workspace profiles keyed by Linear org urlKey. */
+  workspaces?: Record<string, WorkspaceProfile>;
+  /** Default workspace key to use for tools and defaults. */
+  defaultWorkspace?: string;
+  /** Legacy flat API key. Kept for migration detection only. */
   apiKey?: string;
 }
 
@@ -20,21 +37,79 @@ export interface LinearConfig {
  */
 export interface ResolvedLinearConfig {
   enabled: boolean;
+  defaultWorkspace: string | undefined;
+  activeWorkspace: string | undefined;
   apiKey: string | undefined;
+  defaultTeamKey: string | undefined;
+  workspaces: Record<string, WorkspaceProfile>;
 }
 
 const DEFAULTS: ResolvedLinearConfig = {
   enabled: true,
+  defaultWorkspace: undefined,
+  activeWorkspace: undefined,
   apiKey: undefined,
+  defaultTeamKey: undefined,
+  workspaces: {},
 };
 
 const schemaUrl = buildSchemaUrl(pkg.name, pkg.version);
 
+const legacyApiKeyMigration: Migration<LinearConfig> = {
+  name: "legacy-flat-apikey-to-workspaces",
+  shouldRun: (config) => Boolean(config.apiKey && !config.workspaces),
+  run: (config) => {
+    if (!config.apiKey || config.workspaces) return config;
+    const migrated: LinearConfig = structuredClone(config);
+    migrated.workspaces = {
+      default: {
+        apiKey: config.apiKey,
+      },
+    };
+    migrated.defaultWorkspace = "default";
+    delete migrated.apiKey;
+    return migrated;
+  },
+};
+
+function pickActiveWorkspace(
+  workspaces: Record<string, WorkspaceProfile>,
+  preferred?: string,
+): string | undefined {
+  if (preferred && workspaces[preferred]) return preferred;
+
+  const withApiKey = Object.entries(workspaces).find(([, profile]) =>
+    Boolean(profile.apiKey),
+  );
+  if (withApiKey) return withApiKey[0];
+
+  return Object.keys(workspaces)[0];
+}
+
 /**
  * Config loader instance.
- * Config is stored at ~/.pi/agent/extensions/pi-linear.json
+ * Config is stored at ~/.pi/agent/extensions/linear.json
  */
 export const configLoader = new ConfigLoader<
   LinearConfig,
   ResolvedLinearConfig
->("linear", DEFAULTS, { schemaUrl });
+>("linear", DEFAULTS, {
+  schemaUrl,
+  migrations: [legacyApiKeyMigration],
+  afterMerge: (resolved) => {
+    const workspaces = resolved.workspaces ?? {};
+    const activeWorkspace = pickActiveWorkspace(
+      workspaces,
+      resolved.defaultWorkspace,
+    );
+    const profile = activeWorkspace ? workspaces[activeWorkspace] : undefined;
+
+    return {
+      ...resolved,
+      workspaces,
+      activeWorkspace,
+      apiKey: profile?.apiKey ?? process.env.LINEAR_API_KEY,
+      defaultTeamKey: profile?.defaultTeamKey,
+    };
+  },
+});

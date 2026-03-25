@@ -1,43 +1,55 @@
 import { LinearClient } from "@linear/sdk";
 import { configLoader } from "./config";
 
-let client: LinearClient | null = null;
+const clients = new Map<string, LinearClient>();
 
-/**
- * Resolve the API key from config (settings file) or environment.
- * Config takes precedence over env var.
- */
-function resolveApiKey(): string | undefined {
-  const config = configLoader.getConfig();
-  return config.apiKey ?? process.env.LINEAR_API_KEY;
+function getClientKey(workspace?: string): string {
+  const resolvedWorkspace =
+    workspace ?? configLoader.getConfig().activeWorkspace;
+  return resolvedWorkspace ? `workspace:${resolvedWorkspace}` : "env";
 }
 
-/**
- * Get or lazily initialize the Linear client.
- * Returns the client if credentials are available, null otherwise.
- */
-export function getLinearClient(): LinearClient | null {
-  if (client) return client;
+function resolveApiKey(workspace?: string): string | undefined {
+  const config = configLoader.getConfig();
 
-  const apiKey = resolveApiKey();
+  if (workspace) {
+    return config.workspaces[workspace]?.apiKey ?? process.env.LINEAR_API_KEY;
+  }
+
+  return config.apiKey;
+}
+
+export function getLinearClient(workspace?: string): LinearClient | null {
+  const clientKey = getClientKey(workspace);
+  const existing = clients.get(clientKey);
+  if (existing) return existing;
+
+  const apiKey = resolveApiKey(workspace);
   if (!apiKey) return null;
 
-  client = new LinearClient({ apiKey });
+  const client = new LinearClient({ apiKey });
+  clients.set(clientKey, client);
   return client;
 }
 
-/**
- * Check whether Linear credentials are configured.
- */
+export function clearClients(): void {
+  clients.clear();
+}
+
 export function hasLinearCredentials(): boolean {
-  return !!resolveApiKey();
+  const config = configLoader.getConfig();
+  if (process.env.LINEAR_API_KEY) return true;
+  return Object.values(config.workspaces).some(
+    (workspace) => !!workspace.apiKey,
+  );
 }
 
 export const LINEAR_CREDENTIALS_ERROR = [
   "Linear API key not configured. Set it via:",
   "",
-  "  1. /linear:settings command",
-  "  2. Environment variable: export LINEAR_API_KEY=lin_api_...",
+  "  1. /linear:auth command",
+  "  2. /linear:settings command",
+  "  3. Environment variable: export LINEAR_API_KEY=lin_api_...",
   "",
   "Get a key at: https://linear.app/settings/api",
 ].join("\n");

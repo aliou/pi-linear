@@ -28,7 +28,7 @@
     "README.md"
   ],
   "dependencies": {
-    "@aliou/pi-utils-settings": "^0.9.0",
+    "@aliou/pi-utils-settings": "^0.11.0",
     "@aliou/pi-utils-ui": "^0.1.0",
     "@aliou/sh": "^0.1.0",
     "@linear/sdk": "^77.0.0",

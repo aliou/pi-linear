@@ -1,8 +1,29 @@
+import type { ResolvedLinearConfig } from "./config";
+
 /**
  * System prompt guidance for agents using this extension.
  * Injected into the system prompt via hooks.
  */
-export const guidance = `
+export function buildGuidance(config: ResolvedLinearConfig): string {
+  const workspaceKeys = Object.keys(config.workspaces);
+  const workspaceSummary =
+    workspaceKeys.length === 0
+      ? "No configured workspaces."
+      : workspaceKeys
+          .map((workspaceKey) => {
+            const profile = config.workspaces[workspaceKey] ?? {};
+            const active =
+              config.activeWorkspace === workspaceKey ? "active" : "";
+            const defaultTeam = profile.defaultTeamKey
+              ? `defaultTeam=${profile.defaultTeamKey}`
+              : "defaultTeam=(none)";
+            const orgName = profile.orgName ?? workspaceKey;
+            const status = [active, defaultTeam].filter(Boolean).join(" · ");
+            return `- ${orgName} (${workspaceKey})${status ? ` [${status}]` : ""}`;
+          })
+          .join("\n");
+
+  return `
 # Linear
 
 This extension provides tools to interact with Linear issues, projects, milestones, documents, teams, and team states.
@@ -15,6 +36,11 @@ This extension provides tools to interact with Linear issues, projects, mileston
 - linear_documents: Manage Linear documents
 - linear_teams: List teams in the workspace
 - linear_team_states: List team workflow states
+
+## Workspace Context
+
+${workspaceSummary}
+
 ## Usage Guidelines
 
 - Use issue identifiers like ENG-123 when you have them.
@@ -23,3 +49,4 @@ This extension provides tools to interact with Linear issues, projects, mileston
 - For projects, prefer status, lead, and team filters when listing.
 - Use linear_project_milestones for milestone CRUD and issue milestone assignment by ID or name when working with project planning.
 `;
+}

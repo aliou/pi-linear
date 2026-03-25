@@ -37,13 +37,6 @@ export async function createIssue(
     return { error: "title is required to create an issue." };
   }
 
-  if (!params.teamId && !params.teamKey && !params.teamName) {
-    return {
-      error:
-        "A team is required to create an issue. Provide teamId, teamKey, or teamName.",
-    };
-  }
-
   try {
     const teamId = await resolveTeamId(
       client,
@@ -54,7 +47,9 @@ export async function createIssue(
     if (!teamId) {
       const identifier = params.teamKey ?? params.teamName ?? params.teamId;
       return {
-        error: `Could not find team "${identifier}". Verify the team key or name.`,
+        error: identifier
+          ? `Could not find team "${identifier}". Verify the team key or name.`
+          : "No team resolved. Provide teamId/teamKey/teamName or set defaultTeamKey in /linear:auth or /linear:settings.",
       };
     }
 

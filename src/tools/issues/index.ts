@@ -113,7 +113,7 @@ const IssuesParams = Type.Object({
   teamId: Type.Optional(
     Type.String({
       description:
-        "Team ID (UUID). Required for create. For list/search, can use teamKey or teamName instead.",
+        "Team ID (UUID). For create, required unless defaultTeamKey is configured. For list/search, can use teamKey or teamName instead.",
     }),
   ),
   teamKey: Type.Optional(

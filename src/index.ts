@@ -1,7 +1,9 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { hasLinearCredentials, LINEAR_CREDENTIALS_ERROR } from "./client";
+import { registerLinearAuth } from "./commands/auth";
 import { registerLinearSettings } from "./commands/settings";
 import { configLoader } from "./config";
+import { registerHooks } from "./hooks";
 import { registerTools } from "./tools/index";
 
 export default async function (pi: ExtensionAPI) {
@@ -10,7 +12,8 @@ export default async function (pi: ExtensionAPI) {
 
   if (!config.enabled) return;
 
-  // Always register settings so users can configure the API key.
+  // Always register auth + settings so users can manage credentials.
+  registerLinearAuth(pi);
   registerLinearSettings(pi);
 
   if (!hasLinearCredentials()) {
@@ -22,5 +25,6 @@ export default async function (pi: ExtensionAPI) {
     return;
   }
 
+  registerHooks(pi);
   registerTools(pi);
 }

@@ -1,4 +1,5 @@
 import type { LinearClient } from "@linear/sdk";
+import { configLoader } from "./config";
 
 interface TeamEntry {
   id: string;
@@ -6,24 +7,40 @@ interface TeamEntry {
   name: string;
 }
 
-let cachedTeams: TeamEntry[] | null = null;
+const cachedTeamsByWorkspace = new Map<string, TeamEntry[]>();
 
-/** Clear the team cache (e.g. on client re-init). */
-export function clearTeamCache(): void {
-  cachedTeams = null;
+function getCacheKey(workspace?: string): string {
+  const activeWorkspace = workspace ?? configLoader.getConfig().activeWorkspace;
+  return activeWorkspace ? `workspace:${activeWorkspace}` : "env";
 }
 
-/** Fetch and cache the workspace teams. */
-async function ensureTeams(client: LinearClient): Promise<TeamEntry[]> {
-  if (cachedTeams) return cachedTeams;
+/** Clear the team cache (e.g. on client re-init). */
+export function clearTeamCache(workspace?: string): void {
+  if (workspace) {
+    cachedTeamsByWorkspace.delete(getCacheKey(workspace));
+    return;
+  }
+  cachedTeamsByWorkspace.clear();
+}
+
+/** Fetch and cache teams for the active workspace. */
+async function ensureTeams(
+  client: LinearClient,
+  workspace?: string,
+): Promise<TeamEntry[]> {
+  const cacheKey = getCacheKey(workspace);
+  const cached = cachedTeamsByWorkspace.get(cacheKey);
+  if (cached) return cached;
 
   const result = await client.teams();
-  cachedTeams = result.nodes.map((t) => ({
+  const teams = result.nodes.map((t) => ({
     id: t.id,
     key: t.key,
     name: t.name,
   }));
-  return cachedTeams;
+
+  cachedTeamsByWorkspace.set(cacheKey, teams);
+  return teams;
 }
 
 /**
@@ -35,11 +52,12 @@ export async function resolveTeamId(
   teamId?: string,
   teamKey?: string,
   teamName?: string,
+  workspace?: string,
 ): Promise<string | undefined> {
   if (teamId) {
     // Could already be a UUID -- but also accept a key passed as teamId.
     // Try exact UUID first, otherwise search by key/name.
-    const teams = await ensureTeams(client);
+    const teams = await ensureTeams(client, workspace);
     const byId = teams.find((t) => t.id === teamId);
     if (byId) return byId.id;
     // Fallback: maybe the caller passed a key like "GEN" as teamId.
@@ -51,7 +69,7 @@ export async function resolveTeamId(
     return teamId;
   }
 
-  const teams = await ensureTeams(client);
+  const teams = await ensureTeams(client, workspace);
 
   if (teamKey) {
     return teams.find((t) => t.key.toLowerCase() === teamKey.toLowerCase())?.id;
@@ -60,6 +78,13 @@ export async function resolveTeamId(
   if (teamName) {
     return teams.find((t) => t.name.toLowerCase() === teamName.toLowerCase())
       ?.id;
+  }
+
+  const defaultTeamKey = configLoader.getConfig().defaultTeamKey;
+  if (defaultTeamKey) {
+    return teams.find(
+      (t) => t.key.toLowerCase() === defaultTeamKey.toLowerCase(),
+    )?.id;
   }
 
   return undefined;
