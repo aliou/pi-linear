@@ -12,11 +12,15 @@ pi install @aliou/pi-linear
 
 The extension requires a Linear API key. Get one at https://linear.app/settings/api.
 
-### Option 1: Settings command
+### Option 1: Auth command (recommended)
 
-Run `/linear:settings` in pi to configure the API key interactively.
+Run `/linear:auth` in pi to add/edit/remove workspace credentials.
 
-### Option 2: Environment variable
+### Option 2: Settings command
+
+Run `/linear:settings` to manage workspaces and extension toggles.
+
+### Option 3: Environment variable
 
 ```bash
 export LINEAR_API_KEY=lin_api_...
@@ -28,14 +32,20 @@ If no key is found, the extension disables its tools and shows a warning at sess
 
 | Command | Description |
 |---|---|
-| `/linear:settings` | Configure the extension (API key, enable/disable) |
+| `/linear:auth` | Add, edit, or remove workspace credentials |
+| `/linear:settings` | Configure workspaces and extension settings |
 
 ## Settings
 
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `enabled` | `boolean` | `true` | Enable or disable the extension |
-| `apiKey` | `string` | — | Linear API key (falls back to `LINEAR_API_KEY` env var) |
+| `defaultWorkspace` | `string` | auto | Preferred workspace key |
+| `workspaces` | `record` | `{}` | Workspace profiles keyed by org `urlKey` |
+| `workspaces.<key>.apiKey` | `string` | — | Workspace API key |
+| `workspaces.<key>.orgName` | `string` | — | Workspace display label |
+| `workspaces.<key>.defaultTeamKey` | `string` | — | Default team key used when team args are omitted |
+| `apiKey` | `string` | legacy | Legacy flat key; auto-migrated into `workspaces.default` |
 
 ## Tools
 
