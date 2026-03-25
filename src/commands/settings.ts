@@ -1,42 +1,134 @@
 import {
+  FuzzySelector,
   registerSettingsCommand,
   SettingsDetailEditor,
   type SettingsSection,
 } from "@aliou/pi-utils-settings";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import type { Component, SettingsListTheme } from "@mariozechner/pi-tui";
+import { clearClients } from "../client";
 import {
   configLoader,
   type LinearConfig,
   type ResolvedLinearConfig,
+  type WorkspaceProfile,
 } from "../config";
+import { clearTeamCache } from "../teams";
+import { createAuthWizardComponent } from "./auth-wizard";
 
-function createApiKeySubmenu(
-  currentValue: string,
-  done: (selectedValue?: string) => void,
+function cloneConfig(base: LinearConfig | null): LinearConfig {
+  return structuredClone(base ?? ({} as LinearConfig));
+}
+
+function formatWorkspaceLabel(
+  workspaceKey: string,
+  profile: WorkspaceProfile,
+): string {
+  return `${profile.orgName ?? workspaceKey} (${workspaceKey})`;
+}
+
+function removeWorkspaceDraft(
+  tabConfig: LinearConfig | null,
+  workspaceKey: string,
+): LinearConfig {
+  const draft = cloneConfig(tabConfig);
+  const workspaces = { ...(draft.workspaces ?? {}) };
+  delete workspaces[workspaceKey];
+  draft.workspaces = workspaces;
+
+  if (draft.defaultWorkspace === workspaceKey) {
+    draft.defaultWorkspace = Object.keys(workspaces)[0];
+  }
+
+  return draft;
+}
+
+function createWorkspaceSubmenu(
+  title: string,
+  initialKey: string,
+  initialProfile: WorkspaceProfile,
+  onSave: (
+    workspaceKey: string,
+    profile: WorkspaceProfile,
+    remove?: string,
+  ) => void,
   theme: SettingsListTheme,
-  saveDraft: (apiKey: string) => void,
+  done: (summary?: string) => void,
+  onDelete?: (workspaceKey: string) => void,
 ): Component {
-  let value = currentValue === "(not set)" ? "" : currentValue;
+  let workspaceKey = initialKey;
+  const profile: WorkspaceProfile = structuredClone(initialProfile);
 
   return new SettingsDetailEditor({
-    title: "API Key",
+    title,
     theme,
-    onDone: () => done(value || undefined),
+    onDone: () => done(formatWorkspaceLabel(workspaceKey || "(new)", profile)),
     fields: [
       {
-        id: "apiKey",
-        label: "API Key",
+        id: "workspaceKey",
         type: "text",
-        description:
-          "Linear personal API key. Get one at https://linear.app/settings/api",
-        getValue: () => value,
-        setValue: (v) => {
-          value = v;
-          saveDraft(v);
+        label: "Workspace key",
+        description: "Linear org urlKey (for example: acme).",
+        getValue: () => workspaceKey,
+        setValue: (value) => {
+          const next = value.trim();
+          const oldKey = workspaceKey;
+          workspaceKey = next;
+          if (workspaceKey) onSave(workspaceKey, profile, oldKey || undefined);
+        },
+        emptyValueText: "(required)",
+      },
+      {
+        id: "orgName",
+        type: "text",
+        label: "Org name",
+        description: "Display name shown in settings and prompt context.",
+        getValue: () => profile.orgName ?? "",
+        setValue: (value) => {
+          profile.orgName = value.trim() || undefined;
+          if (workspaceKey) onSave(workspaceKey, profile);
         },
         emptyValueText: "(not set)",
       },
+      {
+        id: "apiKey",
+        type: "text",
+        label: "API key",
+        description: "Linear personal API key (lin_api_...).",
+        getValue: () => profile.apiKey ?? "",
+        setValue: (value) => {
+          profile.apiKey = value.trim() || undefined;
+          if (workspaceKey) onSave(workspaceKey, profile);
+        },
+        emptyValueText: "(not set)",
+      },
+      {
+        id: "defaultTeamKey",
+        type: "text",
+        label: "Default team key",
+        description: "Used when tools need a team and one is not provided.",
+        getValue: () => profile.defaultTeamKey ?? "",
+        setValue: (value) => {
+          profile.defaultTeamKey = value.trim() || undefined;
+          if (workspaceKey) onSave(workspaceKey, profile);
+        },
+        emptyValueText: "(not set)",
+      },
+      ...(onDelete
+        ? [
+            {
+              id: "remove",
+              type: "action" as const,
+              label: "Remove workspace",
+              getValue: () => "destructive",
+              confirmMessage: `Remove ${workspaceKey}?`,
+              onConfirm: () => {
+                onDelete(workspaceKey);
+                done("removed");
+              },
+            },
+          ]
+        : []),
     ],
   });
 }
@@ -47,48 +139,132 @@ export function registerLinearSettings(pi: ExtensionAPI): void {
     commandDescription: "Configure Linear extension settings",
     title: "Linear Settings",
     configStore: configLoader,
+    onSave: () => {
+      clearClients();
+      clearTeamCache();
+    },
     buildSections: (
       tabConfig: LinearConfig | null,
       resolved: ResolvedLinearConfig,
       ctx,
     ): SettingsSection[] => {
+      const workspaceKeys = Object.keys(resolved.workspaces).sort((a, b) =>
+        a.localeCompare(b),
+      );
+
+      const generalItems: SettingsSection["items"] = [
+        {
+          id: "enabled",
+          label: "Enabled",
+          description: "Enable or disable the extension",
+          currentValue:
+            (tabConfig?.enabled ?? resolved.enabled) ? "enabled" : "disabled",
+          values: ["enabled", "disabled"],
+        },
+      ];
+
+      if (workspaceKeys.length > 1) {
+        const selectedDefault =
+          tabConfig?.defaultWorkspace ??
+          resolved.activeWorkspace ??
+          workspaceKeys[0];
+
+        generalItems.push({
+          id: "defaultWorkspace",
+          label: "Default workspace",
+          description: "Workspace used by default when tools run.",
+          currentValue: selectedDefault,
+          submenu: (_currentValue: string, done: (summary?: string) => void) =>
+            new FuzzySelector({
+              label: "Default workspace",
+              items: workspaceKeys,
+              searchThreshold: 7,
+              currentValue: selectedDefault,
+              theme: ctx.theme,
+              onSelect: (selected) => {
+                const draft = cloneConfig(tabConfig);
+                draft.defaultWorkspace = selected;
+                ctx.setDraft(draft);
+                done(selected);
+              },
+              onDone: () => done(undefined),
+            }),
+        });
+      }
+
+      // Use workspace key only for short labels in the list
+      const workspaceListItems = workspaceKeys.map((workspaceKey) => {
+        const effective =
+          tabConfig?.workspaces?.[workspaceKey] ??
+          resolved.workspaces[workspaceKey] ??
+          {};
+
+        const tags = [
+          resolved.activeWorkspace === workspaceKey ? "active" : undefined,
+          (tabConfig?.defaultWorkspace ?? resolved.activeWorkspace) ===
+          workspaceKey
+            ? "default"
+            : undefined,
+        ].filter(Boolean);
+
+        return {
+          id: `workspace.${workspaceKey}`,
+          label: workspaceKey,
+          description:
+            `${effective.orgName ?? workspaceKey}. ` +
+            `Team: ${effective.defaultTeamKey ?? "(not set)"}. ` +
+            `Run /linear:auth to validate credentials.`,
+          currentValue: tags.length > 0 ? tags.join(" · ") : "configured",
+          submenu: (_currentValue: string, done: (summary?: string) => void) =>
+            createWorkspaceSubmenu(
+              "Workspace",
+              workspaceKey,
+              effective,
+              (nextKey, nextProfile, removeKey) => {
+                const draft = cloneConfig(tabConfig);
+                const workspaces = { ...(draft.workspaces ?? {}) };
+                if (removeKey && removeKey !== nextKey)
+                  delete workspaces[removeKey];
+                workspaces[nextKey] = nextProfile;
+                draft.workspaces = workspaces;
+                if (!draft.defaultWorkspace) draft.defaultWorkspace = nextKey;
+                if (draft.defaultWorkspace === removeKey) {
+                  draft.defaultWorkspace = nextKey;
+                }
+                ctx.setDraft(draft);
+              },
+              ctx.theme,
+              done,
+              (toRemove) => {
+                const draft = removeWorkspaceDraft(tabConfig, toRemove);
+                ctx.setDraft(draft);
+              },
+            ),
+        };
+      });
+
+      workspaceListItems.push({
+        id: "workspace.add",
+        label: "Add workspace",
+        description: "Run auth wizard and save directly.",
+        currentValue: "open",
+        submenu: (_currentValue: string, done: (summary?: string) => void) =>
+          createAuthWizardComponent({
+            theme: ctx.theme,
+            onDone: (saved) => {
+              done(saved ? "added" : undefined);
+            },
+          }),
+      });
+
       return [
         {
-          label: "Authentication",
-          items: [
-            {
-              id: "apiKey",
-              label: "API Key",
-              description:
-                "Linear API key. Falls back to LINEAR_API_KEY env var if not set. " +
-                "Get a key at https://linear.app/settings/api",
-              currentValue:
-                (tabConfig?.apiKey ?? resolved.apiKey) || "(not set)",
-              submenu: (currentValue, done) =>
-                createApiKeySubmenu(currentValue, done, ctx.theme, (apiKey) => {
-                  const draft = structuredClone(
-                    tabConfig ?? ({} as LinearConfig),
-                  );
-                  draft.apiKey = apiKey || undefined;
-                  ctx.setDraft(draft);
-                }),
-            },
-          ],
+          label: "General",
+          items: generalItems,
         },
         {
-          label: "General",
-          items: [
-            {
-              id: "enabled",
-              label: "Enabled",
-              description: "Enable or disable the extension",
-              currentValue:
-                (tabConfig?.enabled ?? resolved.enabled)
-                  ? "enabled"
-                  : "disabled",
-              values: ["enabled", "disabled"],
-            },
-          ],
+          label: "Workspaces",
+          items: workspaceListItems,
         },
       ];
     },
