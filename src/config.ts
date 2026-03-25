@@ -13,8 +13,6 @@ export interface LinearConfig {
   enabled?: boolean;
   /** Linear API key. If not set, falls back to LINEAR_API_KEY env var. */
   apiKey?: string;
-  /** OAuth access token. If not set, falls back to LINEAR_OAUTH_TOKEN env var. */
-  accessToken?: string;
 }
 
 /**
@@ -23,13 +21,11 @@ export interface LinearConfig {
 export interface ResolvedLinearConfig {
   enabled: boolean;
   apiKey: string | undefined;
-  accessToken: string | undefined;
 }
 
 const DEFAULTS: ResolvedLinearConfig = {
   enabled: true,
   apiKey: undefined,
-  accessToken: undefined,
 };
 
 const schemaUrl = buildSchemaUrl(pkg.name, pkg.version);

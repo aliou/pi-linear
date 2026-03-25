@@ -4,35 +4,12 @@ import { configLoader } from "./config";
 let client: LinearClient | null = null;
 
 /**
- * Resolve Linear credentials from env vars and config.
- * Priority: LINEAR_OAUTH_TOKEN env > LINEAR_API_KEY env > config accessToken > config apiKey.
- * Returns the options to pass to LinearClient, or null if no credentials found.
+ * Resolve the API key from config (settings file) or environment.
+ * Config takes precedence over env var.
  */
-function resolveCredentials():
-  | { accessToken: string }
-  | { apiKey: string }
-  | null {
-  const envOauthToken = process.env.LINEAR_OAUTH_TOKEN;
-  if (envOauthToken) {
-    return { accessToken: envOauthToken };
-  }
-
-  const envApiKey = process.env.LINEAR_API_KEY;
-  if (envApiKey) {
-    return { apiKey: envApiKey };
-  }
-
+function resolveApiKey(): string | undefined {
   const config = configLoader.getConfig();
-
-  if (config.accessToken) {
-    return { accessToken: config.accessToken };
-  }
-
-  if (config.apiKey) {
-    return { apiKey: config.apiKey };
-  }
-
-  return null;
+  return config.apiKey ?? process.env.LINEAR_API_KEY;
 }
 
 /**
@@ -42,10 +19,10 @@ function resolveCredentials():
 export function getLinearClient(): LinearClient | null {
   if (client) return client;
 
-  const credentials = resolveCredentials();
-  if (!credentials) return null;
+  const apiKey = resolveApiKey();
+  if (!apiKey) return null;
 
-  client = new LinearClient(credentials);
+  client = new LinearClient({ apiKey });
   return client;
 }
 
@@ -53,15 +30,14 @@ export function getLinearClient(): LinearClient | null {
  * Check whether Linear credentials are configured.
  */
 export function hasLinearCredentials(): boolean {
-  return !!resolveCredentials();
+  return !!resolveApiKey();
 }
 
 export const LINEAR_CREDENTIALS_ERROR = [
-  "Linear credentials not configured. Set one via:",
+  "Linear API key not configured. Set it via:",
   "",
-  "  1. /linear:settings command (API key or OAuth token)",
+  "  1. /linear:settings command",
   "  2. Environment variable: export LINEAR_API_KEY=lin_api_...",
-  "  3. Environment variable: export LINEAR_OAUTH_TOKEN=lin_oauth_...",
   "",
-  "API keys: https://linear.app/settings/api",
+  "Get a key at: https://linear.app/settings/api",
 ].join("\n");
