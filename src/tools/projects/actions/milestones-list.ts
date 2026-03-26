@@ -25,7 +25,7 @@ export async function listProjectMilestones(
     const project = await client.project(params.id);
     const milestones = await project.projectMilestones({
       first: params.limit ?? 50,
-      includeArchived: params.includeArchived,
+      includeArchived: params.includeArchived ?? false,
     });
 
     return {

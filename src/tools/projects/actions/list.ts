@@ -54,7 +54,7 @@ export async function listProjects(
   try {
     const projects = await client.projects({
       first: params.limit ?? 10,
-      includeArchived: params.includeArchived,
+      includeArchived: params.includeArchived ?? false,
       filter: buildProjectFilter(params) as never,
     });
 

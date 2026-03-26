@@ -198,6 +198,7 @@ function formatIssueForContent(issue: SerializedIssue): string {
   if (issue.project) parts.push(`project=${issue.project}`);
   if (issue.milestone) parts.push(`milestone=${issue.milestone}`);
   if (issue.assignee) parts.push(`assignee=${issue.assignee}`);
+  if (issue.parentId) parts.push(`parentId=${issue.parentId}`);
   parts.push(`url=${issue.url}`);
   return parts.join(" | ");
 }
@@ -357,7 +358,7 @@ export function registerIssuesTool(pi: ExtensionAPI) {
             ...listParams,
             includeCompleted: listParams.includeCompleted ?? false,
             includeCanceled: listParams.includeCanceled ?? false,
-            includeSubIssues: listParams.includeSubIssues ?? false,
+            includeSubIssues: listParams.includeSubIssues ?? true,
           });
           details = result.error
             ? { action: params.action, error: result.error }

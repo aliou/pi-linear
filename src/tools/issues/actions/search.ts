@@ -76,7 +76,7 @@ export async function searchIssues(
   try {
     const results = await client.searchIssues(params.query, {
       first: params.limit ?? 10,
-      includeArchived: params.includeArchived,
+      includeArchived: params.includeArchived ?? false,
       filter: buildIssueFilter(params) as never,
       teamId: params.teamId,
     });

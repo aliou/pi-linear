@@ -36,10 +36,6 @@ function buildIssueFilter(params: ListIssuesParams): Record<string, unknown> {
     filter.state = { type: { nin: excludeTypes } };
   }
 
-  if (!params.includeSubIssues) {
-    filter.parent = { id: { eq: null } };
-  }
-
   if (params.stateId || params.stateName) {
     filter.state = params.stateId
       ? { id: { eq: params.stateId } }
@@ -84,14 +80,19 @@ export async function listIssues(
 
     const issues = await client.issues({
       first: params.limit ?? 10,
-      includeArchived: params.includeArchived,
+      includeArchived: params.includeArchived ?? false,
       filter: Object.keys(filter).length > 0 ? (filter as never) : undefined,
     });
 
+    const serialized = await Promise.all(
+      issues.nodes.map((issue) => serializeIssue(issue)),
+    );
+
     return {
-      issues: await Promise.all(
-        issues.nodes.map((issue) => serializeIssue(issue)),
-      ),
+      issues:
+        params.includeSubIssues === false
+          ? serialized.filter((issue) => !issue.parentId)
+          : serialized,
     };
   } catch (error) {
     return {
