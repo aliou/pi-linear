@@ -35,6 +35,9 @@ export function renderIssueExpanded(
   if (issue.estimate !== undefined) {
     details.push(theme.fg("muted", "Estimate: ") + String(issue.estimate));
   }
+  if (issue.branchName) {
+    details.push(theme.fg("muted", "Branch: ") + issue.branchName);
+  }
   if (details.length > 0) {
     components.push(new Text(details.join("\n"), 0, 0));
   }

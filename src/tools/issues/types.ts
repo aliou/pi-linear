@@ -23,6 +23,7 @@ export interface SerializedIssue {
   team: string;
   parentId?: string;
   milestone?: string;
+  branchName?: string;
 }
 
 export interface SerializedComment {

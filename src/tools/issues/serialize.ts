@@ -40,5 +40,6 @@ export async function serializeIssue(issue: Issue): Promise<SerializedIssue> {
     team: team?.name ?? "Unknown",
     parentId: issue.parentId ?? undefined,
     milestone: milestone?.name,
+    branchName: issue.branchName ?? undefined,
   };
 }

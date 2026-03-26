@@ -314,6 +314,8 @@ export function registerIssuesTool(pi: ExtensionAPI) {
           if (issue.project) summary.push(`Project: ${issue.project}`);
           if (issue.milestone) summary.push(`Milestone: ${issue.milestone}`);
           if (issue.assignee) summary.push(`Assignee: ${issue.assignee}`);
+          if (issue.branchName)
+            summary.push(`Suggested branch: ${issue.branchName}`);
           summary.push(`URL: ${issue.url}`);
           if (issue.description) summary.push(`\n${issue.description}`);
           if (children && children.length > 0) {
