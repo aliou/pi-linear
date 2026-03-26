@@ -152,6 +152,11 @@ export function registerLinearSettings(pi: ExtensionAPI): void {
         a.localeCompare(b),
       );
 
+      const startStateMode =
+        tabConfig?.startUpdateState ?? resolved.startUpdateState;
+      const startBranchMode =
+        tabConfig?.startCreateBranch ?? resolved.startCreateBranch;
+
       const generalItems: SettingsSection["items"] = [
         {
           id: "enabled",
@@ -160,6 +165,25 @@ export function registerLinearSettings(pi: ExtensionAPI): void {
           currentValue:
             (tabConfig?.enabled ?? resolved.enabled) ? "enabled" : "disabled",
           values: ["enabled", "disabled"],
+        },
+      ];
+
+      const issueStartItems: SettingsSection["items"] = [
+        {
+          id: "startUpdateState",
+          label: "Update state",
+          description:
+            "Default behavior for moving an issue to In Progress when using linear_issue_start.",
+          currentValue: startStateMode,
+          values: ["ask", "true", "false"],
+        },
+        {
+          id: "startCreateBranch",
+          label: "Create branch",
+          description:
+            "Default behavior for creating a local git branch when using linear_issue_start.",
+          currentValue: startBranchMode,
+          values: ["ask", "true", "false"],
         },
       ];
 
@@ -261,6 +285,10 @@ export function registerLinearSettings(pi: ExtensionAPI): void {
         {
           label: "General",
           items: generalItems,
+        },
+        {
+          label: "Issue Start",
+          items: issueStartItems,
         },
         {
           label: "Workspaces",

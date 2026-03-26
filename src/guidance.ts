@@ -31,6 +31,7 @@ This extension provides tools to interact with Linear issues, projects, mileston
 ## Available Tools
 
 - linear_issues: Manage issues, comments, attachments, issue relations, and linked issue documents
+- linear_issue_start: Start implementation from an issue (state update + branch kickoff)
 - linear_projects: Manage projects and project relations
 - linear_project_milestones: Manage project milestones
 - linear_documents: Manage Linear documents

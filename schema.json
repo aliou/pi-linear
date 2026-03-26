@@ -4,7 +4,6 @@
   "definitions": {
     "LinearConfig": {
       "additionalProperties": false,
-      "description": "Raw config shape (what gets saved to disk). All fields optional -- only overrides are stored.\n\nJSDoc comments on fields become `description` in the generated JSON Schema. Run `pnpm gen:schema` after changing this interface.",
       "properties": {
         "apiKey": {
           "description": "Legacy flat API key. Kept for migration detection only.",
@@ -18,6 +17,14 @@
           "description": "Enable or disable the extension.",
           "type": "boolean"
         },
+        "startCreateBranch": {
+          "$ref": "#/definitions/StartDecisionMode",
+          "description": "Whether issue start should create a git branch by default: ask, true, false."
+        },
+        "startUpdateState": {
+          "$ref": "#/definitions/StartDecisionMode",
+          "description": "Whether issue start should update tracker state by default: ask, true, false."
+        },
         "workspaces": {
           "additionalProperties": {
             "$ref": "#/definitions/WorkspaceProfile"
@@ -27,6 +34,15 @@
         }
       },
       "type": "object"
+    },
+    "StartDecisionMode": {
+      "description": "Raw config shape (what gets saved to disk). All fields optional -- only overrides are stored.\n\nJSDoc comments on fields become `description` in the generated JSON Schema. Run `pnpm gen:schema` after changing this interface.",
+      "enum": [
+        "ask",
+        "true",
+        "false"
+      ],
+      "type": "string"
     },
     "WorkspaceProfile": {
       "additionalProperties": false,

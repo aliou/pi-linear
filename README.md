@@ -34,6 +34,8 @@ If no key is found, the extension disables its tools and shows a warning at sess
 |---|---|
 | `/linear:auth` | Add, edit, or remove workspace credentials |
 | `/linear:settings` | Configure workspaces and extension settings |
+| `/linear:start [ISSUE_ID]` | Start implementation flow; opens issue picker when no id is provided |
+| `/linear:browse` | Tabbed browser (Issues, Projects, Milestones) inspired by Linear navigation |
 
 ## Settings
 
@@ -41,6 +43,8 @@ If no key is found, the extension disables its tools and shows a warning at sess
 |---|---|---|---|
 | `enabled` | `boolean` | `true` | Enable or disable the extension |
 | `defaultWorkspace` | `string` | auto | Preferred workspace key |
+| `startUpdateState` | `"ask"\|"true"\|"false"` | `"ask"` | Default behavior for issue-start state transition |
+| `startCreateBranch` | `"ask"\|"true"\|"false"` | `"ask"` | Default behavior for issue-start branch creation |
 | `workspaces` | `record` | `{}` | Workspace profiles keyed by org `urlKey` |
 | `workspaces.<key>.apiKey` | `string` | — | Workspace API key |
 | `workspaces.<key>.orgName` | `string` | — | Workspace display label |
@@ -80,6 +84,17 @@ Common issue fields include:
 - `assigneeId`, `assigneeName`
 - `labelId`, `labelName`, `labelIds`
 - `priority`, `dueDate`, `estimate`, `parentId`
+
+### `linear_issue_start`
+
+Start implementation from a Linear issue.
+
+- Input: `id` (required), optional `updateState`, `createBranch`, `allowDirty`
+- Behavior:
+  - can update issue status to `In Progress` (or `Started` fallback)
+  - can create a local branch from Linear suggested `branchName` (fallback generated from issue id/title)
+  - if git tree is dirty, stops and asks for explicit confirmation (`allowDirty: true`)
+  - if current branch is not default branch, warns but still creates the branch
 
 ### `linear_projects`
 

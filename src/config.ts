@@ -21,6 +21,8 @@ export interface WorkspaceProfile {
  * JSDoc comments on fields become `description` in the generated JSON Schema.
  * Run `pnpm gen:schema` after changing this interface.
  */
+export type StartDecisionMode = "ask" | "true" | "false";
+
 export interface LinearConfig {
   /** Enable or disable the extension. */
   enabled?: boolean;
@@ -28,6 +30,10 @@ export interface LinearConfig {
   workspaces?: Record<string, WorkspaceProfile>;
   /** Default workspace key to use for tools and defaults. */
   defaultWorkspace?: string;
+  /** Whether issue start should update tracker state by default: ask, true, false. */
+  startUpdateState?: StartDecisionMode;
+  /** Whether issue start should create a git branch by default: ask, true, false. */
+  startCreateBranch?: StartDecisionMode;
   /** Legacy flat API key. Kept for migration detection only. */
   apiKey?: string;
 }
@@ -41,6 +47,8 @@ export interface ResolvedLinearConfig {
   activeWorkspace: string | undefined;
   apiKey: string | undefined;
   defaultTeamKey: string | undefined;
+  startUpdateState: StartDecisionMode;
+  startCreateBranch: StartDecisionMode;
   workspaces: Record<string, WorkspaceProfile>;
 }
 
@@ -50,6 +58,8 @@ const DEFAULTS: ResolvedLinearConfig = {
   activeWorkspace: undefined,
   apiKey: undefined,
   defaultTeamKey: undefined,
+  startUpdateState: "ask",
+  startCreateBranch: "ask",
   workspaces: {},
 };
 
