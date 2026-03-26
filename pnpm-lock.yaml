@@ -32,8 +32,8 @@ importers:
         version: 0.34.48
     devDependencies:
       '@aliou/biome-plugins':
-        specifier: ^0.3.2
-        version: 0.3.2(@biomejs/biome@2.4.2)
+        specifier: ^0.6.0
+        version: 0.6.0(@biomejs/biome@2.4.2)
       '@biomejs/biome':
         specifier: ^2.3.13
         version: 2.4.2
@@ -64,8 +64,8 @@ importers:
 
 packages:
 
-  '@aliou/biome-plugins@0.3.2':
-    resolution: {integrity: sha512-FG9imcSkAgqrlI+ptXj2K7RVEFnveK714nrJqtfinkC7p5mxQdlpBRZ5QDA1NCpn/uzp45zv9n7wio4r71uvHQ==}
+  '@aliou/biome-plugins@0.6.0':
+    resolution: {integrity: sha512-9TO3YFSl4ZRC12lF+LChxHsDH4h9AfmelhMkRH7grXCxQtTu+2TBPKe/VN9GZ0CJXJxgSohSyKpXsgxP5RpN5A==}
     peerDependencies:
       '@biomejs/biome': '>=2.0.0'
 
@@ -2144,7 +2144,7 @@ packages:
 
 snapshots:
 
-  '@aliou/biome-plugins@0.3.2(@biomejs/biome@2.4.2)':
+  '@aliou/biome-plugins@0.6.0(@biomejs/biome@2.4.2)':
     dependencies:
       '@biomejs/biome': 2.4.2
 
