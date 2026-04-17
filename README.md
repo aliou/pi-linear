@@ -1,3 +1,5 @@
+![banner](https://assets.aliou.me/pi-extensions/banners/pi-linear.png)
+
 # @aliou/pi-linear
 
 Pi extension for interacting with [Linear](https://linear.app) via the Linear SDK.
@@ -77,12 +79,12 @@ Manage Linear issues and issue-scoped resources.
 | `documents_list` | List documents linked to an issue |
 
 Common issue fields include:
-- `teamId`, `teamKey`, `teamName`
-- `projectId`, `projectName`
-- `projectMilestoneId`, `projectMilestoneName`
-- `stateId`, `stateName`
-- `assigneeId`, `assigneeName`
-- `labelId`, `labelName`, `labelIds`
+- `teamId`, `teamKey`
+- `projectId`
+- `projectMilestoneId`
+- `stateId` (resolve via `linear_team_states`)
+- `assigneeId` (resolve via `linear_people`)
+- `labelId`, `labelIds`
 - `priority`, `dueDate`, `estimate`, `parentId`
 
 ### `linear_issue_start`
@@ -149,17 +151,25 @@ Manage Linear documents.
 |---|---|
 | `list` | List active teams in the workspace |
 
+### `linear_people`
+
+List workspace members for assignment.
+
+| Action | Description |
+|---|---|
+| `list` | List active people in the workspace with IDs usable as `assigneeId` |
+
 ### `linear_team_states`
 
 List workflow states for teams.
 
 | Action | Description |
 |---|---|
-| `list` | List team states, optionally filtered by `teamId`, `teamKey`, or `teamName` |
+| `list` | List team states, optionally filtered by `teamId` or `teamKey`; use returned IDs as `stateId` |
 
 ## Notes
 
 - Use issue identifiers like `ENG-123` when you have them.
 - Prefer scoped list and search requests to keep results small and precise.
-- For issue milestone assignment by name, provide the related project as `projectId` or `projectName`.
+- For issue milestone assignment, use `projectMilestoneId`.
 - URL attachments are supported directly. Local file upload is not exposed as a first-class helper yet.
